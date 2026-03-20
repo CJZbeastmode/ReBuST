@@ -1,0 +1,542 @@
+jay@MacBookPro ~/D/MA (main)> python src/training/rl/a2c/a2c_baseline.py                                                                                   (base) 
+/Users/jay/miniconda3/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Training on device: mps
+Using a slow image processor as `use_fast` is unset and a slow processor was saved with this model. `use_fast=True` will be the default behavior in v4.52, even if the model was saved with a slow processor. This will result in minor differences in outputs. You'll still be able to use a slow processor with `use_fast=False`.
+Using patch score: text_align_score
+Model parameters: 199,683
+Found 80 WSI images
+Asking to truncate to max_length but no maximum length is provided and the model has no predefined maximum length. Default to no truncation.
+[Epoch 1/10] Step 10 | Image: TCGA-05-5423-LUAD | Loss: 8.9864 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6930 | P(stop): 0.499
+[Epoch 1/10] Step 20 | Image: TCGA-18-3406-LUSC | Loss: 0.5001 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6427 | P(stop): 0.657
+[Epoch 1/10] Step 30 | Image: TCGA-18-3408-LUSC | Loss: 2.9337 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6879 | P(stop): 0.551
+[Epoch 1/10] Step 40 | Image: TCGA-18-3412-LUSC | Loss: 3.2670 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6875 | P(stop): 0.553
+[Epoch 1/10] Step 50 | Image: TCGA-18-3417-LUSC | Loss: 0.0170 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6690 | P(stop): 0.609
+[Epoch 1/10] Step 60 | Image: TCGA-18-5592-LUSC | Loss: 0.0618 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6647 | P(stop): 0.619
+[Epoch 1/10] Step 70 | Image: TCGA-2H-A9GJ-ESCA | Loss: 11.8225 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6823 | P(stop): 0.573
+[Epoch 1/10] Step 80 | Image: TCGA-2Y-A9GT-LIHC | Loss: 0.1992 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6894 | P(stop): 0.543
+[Epoch 1/10] Step 90 | Image: TCGA-38-4628-LUAD | Loss: 0.5473 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6896 | P(stop): 0.542
+[Epoch 1/10] Step 100 | Image: TCGA-3M-AB46-STAD | Loss: 12.4417 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6346 | P(stop): 0.669
+[Epoch 1/10] Step 110 | Image: TCGA-44-2666-LUAD | Loss: 0.8610 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6700 | P(stop): 0.605
+[Epoch 1/10] Step 120 | Image: TCGA-44-6775-LUAD | Loss: 1.5634 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6931 | P(stop): 0.505
+[Epoch 1/10] Step 130 | Image: TCGA-55-6642-LUAD | Loss: 0.2660 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6893 | P(stop): 0.456
+[Epoch 1/10] Step 140 | Image: TCGA-55-8204-LUAD | Loss: 14.4879 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6926 | P(stop): 0.516
+[Epoch 1/10] Step 150 | Image: TCGA-AA-3489-COAD | Loss: -0.5653 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6472 | P(stop): 0.350
+[Epoch 1/10] Step 160 | Image: TCGA-AD-5900-COAD | Loss: 1.2812 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4726 | P(stop): 0.181
+[Epoch 1/10] Step 170 | Image: TCGA-AG-3591-READ | Loss: 6.8389 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5130 | P(stop): 0.212
+[Epoch 1/10] Step 180 | Image: TCGA-AZ-5407-COAD | Loss: 3.0755 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4416 | P(stop): 0.161
+[Epoch 1/10] Step 190 | Image: TCGA-BD-A3ER-LIHC | Loss: 9.9437 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4991 | P(stop): 0.201
+[Epoch 1/10] Step 200 | Image: TCGA-CC-A5UE-LIHC | Loss: 1.3340 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5790 | P(stop): 0.266
+[Epoch 1/10] Step 210 | Image: TCGA-CG-5716-STAD | Loss: 1.3300 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4255 | P(stop): 0.152
+[Epoch 1/10] Step 220 | Image: TCGA-CG-5723-STAD | Loss: 2.5304 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4588 | P(stop): 0.172
+[Epoch 1/10] Step 230 | Image: TCGA-CK-4950-COAD | Loss: 4.9058 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5595 | P(stop): 0.247
+[Epoch 1/10] Step 240 | Image: TCGA-CK-5913-COAD | Loss: -0.1878 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6346 | P(stop): 0.331
+[Epoch 1/10] Step 250 | Image: TCGA-D3-A1Q6-SKCM | Loss: -0.1450 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5385 | P(stop): 0.229
+[Epoch 1/10] Step 260 | Image: TCGA-D3-A3MO-SKCM | Loss: 9.0640 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4863 | P(stop): 0.193
+[Epoch 1/10] Step 270 | Image: TCGA-D3-A5GL-SKCM | Loss: 2.1295 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4627 | P(stop): 0.174
+[Epoch 1/10] Step 280 | Image: TCGA-D7-8574-STAD | Loss: 2.4344 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6872 | P(stop): 0.445
+[Epoch 1/10] Step 290 | Image: TCGA-DA-A1I5-SKCM | Loss: 0.6377 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6157 | P(stop): 0.694
+[Epoch 1/10] Step 300 | Image: TCGA-DD-A1EB-LIHC | Loss: -0.1267 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6738 | P(stop): 0.598
+[Epoch 1/10] Step 310 | Image: TCGA-DD-A1EG-LIHC | Loss: -0.2861 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6853 | P(stop): 0.438
+[Epoch 1/10] Step 320 | Image: TCGA-F2-6879-PAAD | Loss: 2.4922 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5844 | P(stop): 0.271
+[Epoch 1/10] Step 330 | Image: TCGA-FP-A9TM-STAD | Loss: 0.2311 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5558 | P(stop): 0.244
+[Epoch 1/10] Step 340 | Image: TCGA-G5-6641-READ | Loss: 5.2516 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.6490 | P(stop): 0.353
+[Epoch 1/10] Step 350 | Image: TCGA-HU-A4HB-STAD | Loss: -0.0319 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6909 | P(stop): 0.533
+[Epoch 1/10] Step 360 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.9162 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5591 | P(stop): 0.753
+[Epoch 1/10] Step 370 | Image: TCGA-NQ-A57I-MESO | Loss: 0.0886 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4861 | P(stop): 0.810
+[Epoch 1/10] Step 380 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0106 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5430 | P(stop): 0.767
+[Epoch 1/10] Step 390 | Image: TCGA-V5-AASW-ESCA | Loss: 4.8212 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.6590 | P(stop): 0.630
+[Epoch 1/10] Step 400 | Image: TCGA-XT-AASU-MESO | Loss: 1.8065 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6673 | P(stop): 0.613
+
+================================================================================
+Epoch 1/10 completed in 491.22s
+================================================================================
+loss                :   9.5918 ± 47.4576
+terminal_reward     :   0.9975 ± 0.0499
+episode_return      :   0.5634 ± 5.5854
+steps               :   2.0175 ± 1.0734
+entropy             :   0.6112 ± 0.0817
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_1.pt
+
+[Epoch 2/10] Step 410 | Image: TCGA-05-5423-LUAD | Loss: 0.4356 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6810 | P(stop): 0.570
+[Epoch 2/10] Step 420 | Image: TCGA-18-3406-LUSC | Loss: -0.1721 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6925 | P(stop): 0.482
+[Epoch 2/10] Step 430 | Image: TCGA-18-3408-LUSC | Loss: 1.4150 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6483 | P(stop): 0.351
+[Epoch 2/10] Step 440 | Image: TCGA-18-3412-LUSC | Loss: 14.1053 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.5671 | P(stop): 0.255
+[Epoch 2/10] Step 450 | Image: TCGA-18-3417-LUSC | Loss: 16.5934 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5081 | P(stop): 0.206
+[Epoch 2/10] Step 460 | Image: TCGA-18-5592-LUSC | Loss: 0.6478 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5425 | P(stop): 0.233
+[Epoch 2/10] Step 470 | Image: TCGA-2H-A9GJ-ESCA | Loss: 1.4300 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6922 | P(stop): 0.521
+[Epoch 2/10] Step 480 | Image: TCGA-2Y-A9GT-LIHC | Loss: 15.2969 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6256 | P(stop): 0.680
+[Epoch 2/10] Step 490 | Image: TCGA-38-4628-LUAD | Loss: 1.2118 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5754 | P(stop): 0.730
+[Epoch 2/10] Step 500 | Image: TCGA-3M-AB46-STAD | Loss: 0.9190 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6691 | P(stop): 0.609
+[Epoch 2/10] Step 510 | Image: TCGA-44-2666-LUAD | Loss: 1.6940 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6237 | P(stop): 0.683
+[Epoch 2/10] Step 520 | Image: TCGA-44-6775-LUAD | Loss: 0.0436 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5270 | P(stop): 0.780
+[Epoch 2/10] Step 530 | Image: TCGA-55-6642-LUAD | Loss: 4.1863 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6885 | P(stop): 0.548
+[Epoch 2/10] Step 540 | Image: TCGA-55-8204-LUAD | Loss: 21.2340 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6644 | P(stop): 0.547
+[Epoch 2/10] Step 550 | Image: TCGA-AA-3489-COAD | Loss: 11.3174 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6728 | P(stop): 0.400
+[Epoch 2/10] Step 560 | Image: TCGA-AD-5900-COAD | Loss: 19.0807 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6332 | P(stop): 0.407
+[Epoch 2/10] Step 570 | Image: TCGA-AG-3591-READ | Loss: -0.0276 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5781 | P(stop): 0.265
+[Epoch 2/10] Step 580 | Image: TCGA-AZ-5407-COAD | Loss: 0.0865 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5143 | P(stop): 0.214
+[Epoch 2/10] Step 590 | Image: TCGA-BD-A3ER-LIHC | Loss: 0.5297 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4537 | P(stop): 0.169
+[Epoch 2/10] Step 600 | Image: TCGA-CC-A5UE-LIHC | Loss: 0.0865 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4573 | P(stop): 0.171
+[Epoch 2/10] Step 610 | Image: TCGA-CG-5716-STAD | Loss: 0.2910 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5761 | P(stop): 0.263
+[Epoch 2/10] Step 620 | Image: TCGA-CG-5723-STAD | Loss: 0.2258 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6775 | P(stop): 0.588
+[Epoch 2/10] Step 630 | Image: TCGA-CK-4950-COAD | Loss: 5.4454 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.6130 | P(stop): 0.697
+[Epoch 2/10] Step 640 | Image: TCGA-CK-5913-COAD | Loss: 0.0088 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5575 | P(stop): 0.754
+[Epoch 2/10] Step 650 | Image: TCGA-D3-A1Q6-SKCM | Loss: 0.0172 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5305 | P(stop): 0.777
+[Epoch 2/10] Step 660 | Image: TCGA-D3-A3MO-SKCM | Loss: -0.0194 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3704 | P(stop): 0.878
+[Epoch 2/10] Step 670 | Image: TCGA-D3-A5GL-SKCM | Loss: 6.3456 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5585 | P(stop): 0.689
+[Epoch 2/10] Step 680 | Image: TCGA-D7-8574-STAD | Loss: -0.1923 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6564 | P(stop): 0.365
+[Epoch 2/10] Step 690 | Image: TCGA-DA-A1I5-SKCM | Loss: 0.2504 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6759 | P(stop): 0.515
+[Epoch 2/10] Step 700 | Image: TCGA-DD-A1EB-LIHC | Loss: 0.2288 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6467 | P(stop): 0.651
+[Epoch 2/10] Step 710 | Image: TCGA-DD-A1EG-LIHC | Loss: 0.1051 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6924 | P(stop): 0.520
+[Epoch 2/10] Step 720 | Image: TCGA-F2-6879-PAAD | Loss: -0.0378 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6080 | P(stop): 0.703
+[Epoch 2/10] Step 730 | Image: TCGA-FP-A9TM-STAD | Loss: -0.0238 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5581 | P(stop): 0.754
+[Epoch 2/10] Step 740 | Image: TCGA-G5-6641-READ | Loss: -0.3252 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5923 | P(stop): 0.720
+[Epoch 2/10] Step 750 | Image: TCGA-HU-A4HB-STAD | Loss: 4.0619 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6435 | P(stop): 0.655
+[Epoch 2/10] Step 760 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.0043 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6867 | P(stop): 0.557
+[Epoch 2/10] Step 770 | Image: TCGA-NQ-A57I-MESO | Loss: 1.6884 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6042 | P(stop): 0.575
+[Epoch 2/10] Step 780 | Image: TCGA-V4-A9EE-UVM | Loss: 0.9985 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4231 | P(stop): 0.850
+[Epoch 2/10] Step 790 | Image: TCGA-V5-AASW-ESCA | Loss: 4.6598 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.5786 | P(stop): 0.312
+[Epoch 2/10] Step 800 | Image: TCGA-XT-AASU-MESO | Loss: 1.0644 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3635 | P(stop): 0.118
+
+================================================================================
+Epoch 2/10 completed in 463.90s
+================================================================================
+loss                :   5.0360 ± 28.6921
+terminal_reward     :   0.9975 ± 0.0499
+episode_return      :   0.9868 ± 4.0133
+steps               :   1.8475 ± 0.9946
+entropy             :   0.5919 ± 0.0950
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_2.pt
+
+[Epoch 3/10] Step 810 | Image: TCGA-05-5423-LUAD | Loss: 0.3026 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5396 | P(stop): 0.406
+[Epoch 3/10] Step 820 | Image: TCGA-18-3406-LUSC | Loss: 0.0447 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3418 | P(stop): 0.108
+[Epoch 3/10] Step 830 | Image: TCGA-18-3408-LUSC | Loss: 1.5000 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5600 | P(stop): 0.673
+[Epoch 3/10] Step 840 | Image: TCGA-18-3412-LUSC | Loss: -0.0117 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4539 | P(stop): 0.831
+[Epoch 3/10] Step 850 | Image: TCGA-18-3417-LUSC | Loss: 0.3509 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6014 | P(stop): 0.306
+[Epoch 3/10] Step 860 | Image: TCGA-18-5592-LUSC | Loss: 0.2571 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5994 | P(stop): 0.287
+[Epoch 3/10] Step 870 | Image: TCGA-2H-A9GJ-ESCA | Loss: -0.0022 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3877 | P(stop): 0.869
+[Epoch 3/10] Step 880 | Image: TCGA-2Y-A9GT-LIHC | Loss: -0.0223 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6736 | P(stop): 0.598
+[Epoch 3/10] Step 890 | Image: TCGA-38-4628-LUAD | Loss: 0.8393 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6815 | P(stop): 0.576
+[Epoch 3/10] Step 900 | Image: TCGA-3M-AB46-STAD | Loss: 0.0213 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6652 | P(stop): 0.618
+[Epoch 3/10] Step 910 | Image: TCGA-44-2666-LUAD | Loss: -0.0627 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5992 | P(stop): 0.713
+[Epoch 3/10] Step 920 | Image: TCGA-44-6775-LUAD | Loss: -0.0047 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3279 | P(stop): 0.899
+[Epoch 3/10] Step 930 | Image: TCGA-55-6642-LUAD | Loss: 0.1524 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6929 | P(stop): 0.488
+[Epoch 3/10] Step 940 | Image: TCGA-55-8204-LUAD | Loss: 0.0287 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6324 | P(stop): 0.673
+[Epoch 3/10] Step 950 | Image: TCGA-AA-3489-COAD | Loss: 1.8151 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5273 | P(stop): 0.780
+[Epoch 3/10] Step 960 | Image: TCGA-AD-5900-COAD | Loss: 3.3797 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5644 | P(stop): 0.740
+[Epoch 3/10] Step 970 | Image: TCGA-AG-3591-READ | Loss: 4.4981 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5972 | P(stop): 0.698
+[Epoch 3/10] Step 980 | Image: TCGA-AZ-5407-COAD | Loss: 0.1467 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6196 | P(stop): 0.612
+[Epoch 3/10] Step 990 | Image: TCGA-BD-A3ER-LIHC | Loss: 2.2733 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5693 | P(stop): 0.540
+[Epoch 3/10] Step 1000 | Image: TCGA-CC-A5UE-LIHC | Loss: -0.2437 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6209 | P(stop): 0.687
+[Epoch 3/10] Step 1010 | Image: TCGA-CG-5716-STAD | Loss: 42.8006 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.3078 | P(stop): 0.093
+[Epoch 3/10] Step 1020 | Image: TCGA-CG-5723-STAD | Loss: 11.0937 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.2262 | P(stop): 0.060
+[Epoch 3/10] Step 1030 | Image: TCGA-CK-4950-COAD | Loss: 33.9854 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.2858 | P(stop): 0.094
+[Epoch 3/10] Step 1040 | Image: TCGA-CK-5913-COAD | Loss: 7.5677 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1735 | P(stop): 0.042
+[Epoch 3/10] Step 1050 | Image: TCGA-D3-A1Q6-SKCM | Loss: 1.0464 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1476 | P(stop): 0.034
+[Epoch 3/10] Step 1060 | Image: TCGA-D3-A3MO-SKCM | Loss: -0.1920 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1281 | P(stop): 0.028
+[Epoch 3/10] Step 1070 | Image: TCGA-D3-A5GL-SKCM | Loss: 0.4256 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5137 | P(stop): 0.790
+[Epoch 3/10] Step 1080 | Image: TCGA-D7-8574-STAD | Loss: 4.1401 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.1037 | P(stop): 0.022
+[Epoch 3/10] Step 1090 | Image: TCGA-DA-A1I5-SKCM | Loss: 4.2152 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1492 | P(stop): 0.488
+[Epoch 3/10] Step 1100 | Image: TCGA-DD-A1EB-LIHC | Loss: 4.2291 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1391 | P(stop): 0.032
+[Epoch 3/10] Step 1110 | Image: TCGA-DD-A1EG-LIHC | Loss: 4.8081 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1112 | P(stop): 0.024
+[Epoch 3/10] Step 1120 | Image: TCGA-F2-6879-PAAD | Loss: 0.0409 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2688 | P(stop): 0.260
+[Epoch 3/10] Step 1130 | Image: TCGA-FP-A9TM-STAD | Loss: 1.4224 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1622 | P(stop): 0.310
+[Epoch 3/10] Step 1140 | Image: TCGA-G5-6641-READ | Loss: -1.1565 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0886 | P(stop): 0.018
+[Epoch 3/10] Step 1150 | Image: TCGA-HU-A4HB-STAD | Loss: 1.3710 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0620 | P(stop): 0.011
+[Epoch 3/10] Step 1160 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.6632 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0585 | P(stop): 0.011
+[Epoch 3/10] Step 1170 | Image: TCGA-NQ-A57I-MESO | Loss: 0.1112 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2722 | P(stop): 0.391
+[Epoch 3/10] Step 1180 | Image: TCGA-V4-A9EE-UVM | Loss: -0.3474 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5954 | P(stop): 0.717
+[Epoch 3/10] Step 1190 | Image: TCGA-V5-AASW-ESCA | Loss: 1.3523 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2139 | P(stop): 0.253
+[Epoch 3/10] Step 1200 | Image: TCGA-XT-AASU-MESO | Loss: -0.0069 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3516 | P(stop): 0.888
+
+================================================================================
+Epoch 3/10 completed in 625.21s
+================================================================================
+loss                :   4.7612 ± 14.6638
+terminal_reward     :   0.9950 ± 0.0705
+episode_return      :   0.9798 ± 3.9365
+steps               :   2.3850 ± 1.2376
+entropy             :   0.3905 ± 0.2085
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_3.pt
+
+[Epoch 4/10] Step 1210 | Image: TCGA-05-5423-LUAD | Loss: 1.8697 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1047 | P(stop): 0.022
+[Epoch 4/10] Step 1220 | Image: TCGA-18-3406-LUSC | Loss: 3.8895 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1368 | P(stop): 0.031
+[Epoch 4/10] Step 1230 | Image: TCGA-18-3408-LUSC | Loss: 6.6186 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4863 | P(stop): 0.197
+[Epoch 4/10] Step 1240 | Image: TCGA-18-3412-LUSC | Loss: 0.6526 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3289 | P(stop): 0.884
+[Epoch 4/10] Step 1250 | Image: TCGA-18-3417-LUSC | Loss: 0.0019 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2661 | P(stop): 0.925
+[Epoch 4/10] Step 1260 | Image: TCGA-18-5592-LUSC | Loss: -0.0072 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2760 | P(stop): 0.921
+[Epoch 4/10] Step 1270 | Image: TCGA-2H-A9GJ-ESCA | Loss: 0.0194 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3171 | P(stop): 0.904
+[Epoch 4/10] Step 1280 | Image: TCGA-2Y-A9GT-LIHC | Loss: -0.0291 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4512 | P(stop): 0.833
+[Epoch 4/10] Step 1290 | Image: TCGA-38-4628-LUAD | Loss: 0.0319 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5004 | P(stop): 0.800
+[Epoch 4/10] Step 1300 | Image: TCGA-3M-AB46-STAD | Loss: -0.3657 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5704 | P(stop): 0.743
+[Epoch 4/10] Step 1310 | Image: TCGA-44-2666-LUAD | Loss: 10.8276 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6764 | P(stop): 0.586
+[Epoch 4/10] Step 1320 | Image: TCGA-44-6775-LUAD | Loss: 8.0025 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6616 | P(stop): 0.623
+[Epoch 4/10] Step 1330 | Image: TCGA-55-6642-LUAD | Loss: -0.1320 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6912 | P(stop): 0.468
+[Epoch 4/10] Step 1340 | Image: TCGA-55-8204-LUAD | Loss: 25.2904 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5399 | P(stop): 0.286
+[Epoch 4/10] Step 1350 | Image: TCGA-AA-3489-COAD | Loss: -0.6601 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4718 | P(stop): 0.180
+[Epoch 4/10] Step 1360 | Image: TCGA-AD-5900-COAD | Loss: 26.1086 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.5062 | P(stop): 0.281
+[Epoch 4/10] Step 1370 | Image: TCGA-AG-3591-READ | Loss: 0.6615 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4433 | P(stop): 0.222
+[Epoch 4/10] Step 1380 | Image: TCGA-AZ-5407-COAD | Loss: 1.3419 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4407 | P(stop): 0.162
+[Epoch 4/10] Step 1390 | Image: TCGA-BD-A3ER-LIHC | Loss: 1.6944 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4705 | P(stop): 0.186
+[Epoch 4/10] Step 1400 | Image: TCGA-CC-A5UE-LIHC | Loss: 0.2484 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6386 | P(stop): 0.664
+[Epoch 4/10] Step 1410 | Image: TCGA-CG-5716-STAD | Loss: 9.8515 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4170 | P(stop): 0.164
+[Epoch 4/10] Step 1420 | Image: TCGA-CG-5723-STAD | Loss: 8.6762 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5224 | P(stop): 0.734
+[Epoch 4/10] Step 1430 | Image: TCGA-CK-4950-COAD | Loss: 0.1943 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2582 | P(stop): 0.928
+[Epoch 4/10] Step 1440 | Image: TCGA-CK-5913-COAD | Loss: -0.0027 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1880 | P(stop): 0.954
+[Epoch 4/10] Step 1450 | Image: TCGA-D3-A1Q6-SKCM | Loss: -0.0062 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1758 | P(stop): 0.957
+[Epoch 4/10] Step 1460 | Image: TCGA-D3-A3MO-SKCM | Loss: -0.0012 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.0689 | P(stop): 0.987
+[Epoch 4/10] Step 1470 | Image: TCGA-D3-A5GL-SKCM | Loss: -0.0017 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.0945 | P(stop): 0.981
+[Epoch 4/10] Step 1480 | Image: TCGA-D7-8574-STAD | Loss: -0.0105 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3396 | P(stop): 0.893
+[Epoch 4/10] Step 1490 | Image: TCGA-DA-A1I5-SKCM | Loss: -0.0038 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1167 | P(stop): 0.975
+[Epoch 4/10] Step 1500 | Image: TCGA-DD-A1EB-LIHC | Loss: 0.2227 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5052 | P(stop): 0.796
+[Epoch 4/10] Step 1510 | Image: TCGA-DD-A1EG-LIHC | Loss: 2.5511 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5191 | P(stop): 0.230
+[Epoch 4/10] Step 1520 | Image: TCGA-F2-6879-PAAD | Loss: 1.3796 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4042 | P(stop): 0.268
+[Epoch 4/10] Step 1530 | Image: TCGA-FP-A9TM-STAD | Loss: 0.4832 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.3315 | P(stop): 0.343
+[Epoch 4/10] Step 1540 | Image: TCGA-G5-6641-READ | Loss: 1.0977 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.2996 | P(stop): 0.144
+[Epoch 4/10] Step 1550 | Image: TCGA-HU-A4HB-STAD | Loss: 0.4887 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2608 | P(stop): 0.075
+[Epoch 4/10] Step 1560 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.2162 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5058 | P(stop): 0.400
+[Epoch 4/10] Step 1570 | Image: TCGA-NQ-A57I-MESO | Loss: 0.0275 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1515 | P(stop): 0.459
+[Epoch 4/10] Step 1580 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0057 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2826 | P(stop): 0.918
+[Epoch 4/10] Step 1590 | Image: TCGA-V5-AASW-ESCA | Loss: 14.6119 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.2611 | P(stop): 0.279
+[Epoch 4/10] Step 1600 | Image: TCGA-XT-AASU-MESO | Loss: 0.0731 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3719 | P(stop): 0.877
+
+================================================================================
+Epoch 4/10 completed in 535.77s
+================================================================================
+loss                :   5.2530 ± 25.4222
+terminal_reward     :   0.9950 ± 0.0705
+episode_return      :   0.6236 ± 4.1634
+steps               :   2.0800 ± 1.2283
+entropy             :   0.3645 ± 0.1839
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_4.pt
+
+[Epoch 5/10] Step 1610 | Image: TCGA-05-5423-LUAD | Loss: 10.4837 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6327 | P(stop): 0.592
+[Epoch 5/10] Step 1620 | Image: TCGA-18-3406-LUSC | Loss: 0.7944 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6122 | P(stop): 0.302
+[Epoch 5/10] Step 1630 | Image: TCGA-18-3408-LUSC | Loss: 1.0888 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2297 | P(stop): 0.121
+[Epoch 5/10] Step 1640 | Image: TCGA-18-3412-LUSC | Loss: 2.5525 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4869 | P(stop): 0.295
+[Epoch 5/10] Step 1650 | Image: TCGA-18-3417-LUSC | Loss: 0.2098 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4834 | P(stop): 0.812
+[Epoch 5/10] Step 1660 | Image: TCGA-18-5592-LUSC | Loss: 0.0131 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1371 | P(stop): 0.969
+[Epoch 5/10] Step 1670 | Image: TCGA-2H-A9GJ-ESCA | Loss: -0.0005 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1928 | P(stop): 0.952
+[Epoch 5/10] Step 1680 | Image: TCGA-2Y-A9GT-LIHC | Loss: -0.0564 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6700 | P(stop): 0.607
+[Epoch 5/10] Step 1690 | Image: TCGA-38-4628-LUAD | Loss: 0.0092 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6741 | P(stop): 0.403
+[Epoch 5/10] Step 1700 | Image: TCGA-3M-AB46-STAD | Loss: 1.5830 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.6426 | P(stop): 0.448
+[Epoch 5/10] Step 1710 | Image: TCGA-44-2666-LUAD | Loss: 0.5563 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4467 | P(stop): 0.428
+[Epoch 5/10] Step 1720 | Image: TCGA-44-6775-LUAD | Loss: 3.9965 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5884 | P(stop): 0.724
+[Epoch 5/10] Step 1730 | Image: TCGA-55-6642-LUAD | Loss: 1.3494 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1560 | P(stop): 0.071
+[Epoch 5/10] Step 1740 | Image: TCGA-55-8204-LUAD | Loss: 0.0676 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3559 | P(stop): 0.885
+[Epoch 5/10] Step 1750 | Image: TCGA-AA-3489-COAD | Loss: 0.0038 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6357 | P(stop): 0.668
+[Epoch 5/10] Step 1760 | Image: TCGA-AD-5900-COAD | Loss: 2.8891 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0627 | P(stop): 0.320
+[Epoch 5/10] Step 1770 | Image: TCGA-AG-3591-READ | Loss: -0.0171 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4023 | P(stop): 0.861
+[Epoch 5/10] Step 1780 | Image: TCGA-AZ-5407-COAD | Loss: -0.1593 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6930 | P(stop): 0.509
+[Epoch 5/10] Step 1790 | Image: TCGA-BD-A3ER-LIHC | Loss: -0.0027 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2740 | P(stop): 0.922
+[Epoch 5/10] Step 1800 | Image: TCGA-CC-A5UE-LIHC | Loss: 21.2577 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3322 | P(stop): 0.372
+[Epoch 5/10] Step 1810 | Image: TCGA-CG-5716-STAD | Loss: 0.4020 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6504 | P(stop): 0.461
+[Epoch 5/10] Step 1820 | Image: TCGA-CG-5723-STAD | Loss: 1.4317 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5667 | P(stop): 0.411
+[Epoch 5/10] Step 1830 | Image: TCGA-CK-4950-COAD | Loss: 2.7551 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.0933 | P(stop): 0.026
+[Epoch 5/10] Step 1840 | Image: TCGA-CK-5913-COAD | Loss: 5.1964 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1907 | P(stop): 0.072
+[Epoch 5/10] Step 1850 | Image: TCGA-D3-A1Q6-SKCM | Loss: 1.6840 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1762 | P(stop): 0.050
+[Epoch 5/10] Step 1860 | Image: TCGA-D3-A3MO-SKCM | Loss: 3.5414 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3345 | P(stop): 0.154
+[Epoch 5/10] Step 1870 | Image: TCGA-D3-A5GL-SKCM | Loss: 27.0753 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.3695 | P(stop): 0.138
+[Epoch 5/10] Step 1880 | Image: TCGA-D7-8574-STAD | Loss: 0.4805 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.6082 | P(stop): 0.302
+[Epoch 5/10] Step 1890 | Image: TCGA-DA-A1I5-SKCM | Loss: 0.0871 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3165 | P(stop): 0.904
+[Epoch 5/10] Step 1900 | Image: TCGA-DD-A1EB-LIHC | Loss: -0.0083 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2294 | P(stop): 0.939
+[Epoch 5/10] Step 1910 | Image: TCGA-DD-A1EG-LIHC | Loss: 0.2641 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6010 | P(stop): 0.416
+[Epoch 5/10] Step 1920 | Image: TCGA-F2-6879-PAAD | Loss: -0.0404 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5035 | P(stop): 0.798
+[Epoch 5/10] Step 1930 | Image: TCGA-FP-A9TM-STAD | Loss: 8.8585 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0912 | P(stop): 0.481
+[Epoch 5/10] Step 1940 | Image: TCGA-G5-6641-READ | Loss: 1.0709 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0779 | P(stop): 0.315
+[Epoch 5/10] Step 1950 | Image: TCGA-HU-A4HB-STAD | Loss: -0.0950 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6523 | P(stop): 0.642
+[Epoch 5/10] Step 1960 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.0056 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5495 | P(stop): 0.761
+[Epoch 5/10] Step 1970 | Image: TCGA-NQ-A57I-MESO | Loss: 11.4919 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1133 | P(stop): 0.299
+[Epoch 5/10] Step 1980 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0173 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4063 | P(stop): 0.859
+[Epoch 5/10] Step 1990 | Image: TCGA-V5-AASW-ESCA | Loss: 3.0608 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3602 | P(stop): 0.455
+[Epoch 5/10] Step 2000 | Image: TCGA-XT-AASU-MESO | Loss: 1.0992 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5669 | P(stop): 0.532
+
+================================================================================
+Epoch 5/10 completed in 550.49s
+================================================================================
+loss                :   4.6291 ± 23.0149
+terminal_reward     :   0.9950 ± 0.0705
+episode_return      :   1.4116 ± 4.1876
+steps               :   2.1875 ± 1.1564
+entropy             :   0.3707 ± 0.1845
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_5.pt
+
+[Epoch 6/10] Step 2010 | Image: TCGA-05-5423-LUAD | Loss: 1.8140 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6730 | P(stop): 0.600
+[Epoch 6/10] Step 2020 | Image: TCGA-18-3406-LUSC | Loss: 0.4625 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.5668 | P(stop): 0.376
+[Epoch 6/10] Step 2030 | Image: TCGA-18-3408-LUSC | Loss: 1.4143 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1330 | P(stop): 0.030
+[Epoch 6/10] Step 2040 | Image: TCGA-18-3412-LUSC | Loss: 36.9127 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.2425 | P(stop): 0.076
+[Epoch 6/10] Step 2050 | Image: TCGA-18-3417-LUSC | Loss: 0.2357 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6335 | P(stop): 0.671
+[Epoch 6/10] Step 2060 | Image: TCGA-18-5592-LUSC | Loss: 0.4623 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4571 | P(stop): 0.827
+[Epoch 6/10] Step 2070 | Image: TCGA-2H-A9GJ-ESCA | Loss: -0.0391 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4968 | P(stop): 0.803
+[Epoch 6/10] Step 2080 | Image: TCGA-2Y-A9GT-LIHC | Loss: 1.7399 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1254 | P(stop): 0.466
+[Epoch 6/10] Step 2090 | Image: TCGA-38-4628-LUAD | Loss: 0.0446 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6139 | P(stop): 0.696
+[Epoch 6/10] Step 2100 | Image: TCGA-3M-AB46-STAD | Loss: 26.1802 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4528 | P(stop): 0.530
+[Epoch 6/10] Step 2110 | Image: TCGA-44-2666-LUAD | Loss: 4.2380 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1518 | P(stop): 0.455
+[Epoch 6/10] Step 2120 | Image: TCGA-44-6775-LUAD | Loss: 3.6362 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2534 | P(stop): 0.398
+[Epoch 6/10] Step 2130 | Image: TCGA-55-6642-LUAD | Loss: 1.9866 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1971 | P(stop): 0.163
+[Epoch 6/10] Step 2140 | Image: TCGA-55-8204-LUAD | Loss: 12.3493 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2951 | P(stop): 0.559
+[Epoch 6/10] Step 2150 | Image: TCGA-AA-3489-COAD | Loss: -0.2195 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6077 | P(stop): 0.692
+[Epoch 6/10] Step 2160 | Image: TCGA-AD-5900-COAD | Loss: 11.8447 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1330 | P(stop): 0.307
+[Epoch 6/10] Step 2170 | Image: TCGA-AG-3591-READ | Loss: 3.1909 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4936 | P(stop): 0.803
+[Epoch 6/10] Step 2180 | Image: TCGA-AZ-5407-COAD | Loss: 0.1965 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1938 | P(stop): 0.258
+[Epoch 6/10] Step 2190 | Image: TCGA-BD-A3ER-LIHC | Loss: 0.0065 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3672 | P(stop): 0.880
+[Epoch 6/10] Step 2200 | Image: TCGA-CC-A5UE-LIHC | Loss: 0.0584 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1785 | P(stop): 0.443
+[Epoch 6/10] Step 2210 | Image: TCGA-CG-5716-STAD | Loss: 18.7142 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.0645 | P(stop): 0.014
+[Epoch 6/10] Step 2220 | Image: TCGA-CG-5723-STAD | Loss: 1.2756 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3836 | P(stop): 0.416
+[Epoch 6/10] Step 2230 | Image: TCGA-CK-4950-COAD | Loss: 1.9720 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1501 | P(stop): 0.060
+[Epoch 6/10] Step 2240 | Image: TCGA-CK-5913-COAD | Loss: -1.5741 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2145 | P(stop): 0.056
+[Epoch 6/10] Step 2250 | Image: TCGA-D3-A1Q6-SKCM | Loss: 0.8916 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2376 | P(stop): 0.409
+[Epoch 6/10] Step 2260 | Image: TCGA-D3-A3MO-SKCM | Loss: 2.6355 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3090 | P(stop): 0.135
+[Epoch 6/10] Step 2270 | Image: TCGA-D3-A5GL-SKCM | Loss: 1.0824 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3565 | P(stop): 0.403
+[Epoch 6/10] Step 2280 | Image: TCGA-D7-8574-STAD | Loss: 0.6760 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.4192 | P(stop): 0.240
+[Epoch 6/10] Step 2290 | Image: TCGA-DA-A1I5-SKCM | Loss: 2.1228 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4185 | P(stop): 0.297
+[Epoch 6/10] Step 2300 | Image: TCGA-DD-A1EB-LIHC | Loss: 3.7247 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4096 | P(stop): 0.808
+[Epoch 6/10] Step 2310 | Image: TCGA-DD-A1EG-LIHC | Loss: 0.2061 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4049 | P(stop): 0.276
+[Epoch 6/10] Step 2320 | Image: TCGA-F2-6879-PAAD | Loss: 0.0342 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5387 | P(stop): 0.551
+[Epoch 6/10] Step 2330 | Image: TCGA-FP-A9TM-STAD | Loss: 1.4084 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1263 | P(stop): 0.200
+[Epoch 6/10] Step 2340 | Image: TCGA-G5-6641-READ | Loss: 0.6308 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2349 | P(stop): 0.411
+[Epoch 6/10] Step 2350 | Image: TCGA-HU-A4HB-STAD | Loss: 0.8423 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2242 | P(stop): 0.132
+[Epoch 6/10] Step 2360 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.0243 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5228 | P(stop): 0.465
+[Epoch 6/10] Step 2370 | Image: TCGA-NQ-A57I-MESO | Loss: 4.4618 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1152 | P(stop): 0.470
+[Epoch 6/10] Step 2380 | Image: TCGA-V4-A9EE-UVM | Loss: 0.7064 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2097 | P(stop): 0.494
+[Epoch 6/10] Step 2390 | Image: TCGA-V5-AASW-ESCA | Loss: 1.5819 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2220 | P(stop): 0.355
+[Epoch 6/10] Step 2400 | Image: TCGA-XT-AASU-MESO | Loss: -0.0112 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5410 | P(stop): 0.496
+
+================================================================================
+Epoch 6/10 completed in 578.22s
+================================================================================
+loss                :   4.3629 ± 15.9067
+terminal_reward     :   1.0000 ± 0.0000
+episode_return      :   1.8281 ± 4.1614
+steps               :   2.3275 ± 1.0771
+entropy             :   0.3322 ± 0.1689
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_6.pt
+
+[Epoch 7/10] Step 2410 | Image: TCGA-05-5423-LUAD | Loss: 0.0876 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3896 | P(stop): 0.868
+[Epoch 7/10] Step 2420 | Image: TCGA-18-3406-LUSC | Loss: 0.3143 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2579 | P(stop): 0.356
+[Epoch 7/10] Step 2430 | Image: TCGA-18-3408-LUSC | Loss: 7.9191 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3257 | P(stop): 0.269
+[Epoch 7/10] Step 2440 | Image: TCGA-18-3412-LUSC | Loss: 0.4012 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4479 | P(stop): 0.344
+[Epoch 7/10] Step 2450 | Image: TCGA-18-3417-LUSC | Loss: 0.0280 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3281 | P(stop): 0.899
+[Epoch 7/10] Step 2460 | Image: TCGA-18-5592-LUSC | Loss: -0.0928 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6456 | P(stop): 0.653
+[Epoch 7/10] Step 2470 | Image: TCGA-2H-A9GJ-ESCA | Loss: -0.0035 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1348 | P(stop): 0.970
+[Epoch 7/10] Step 2480 | Image: TCGA-2Y-A9GT-LIHC | Loss: -0.0035 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1155 | P(stop): 0.975
+[Epoch 7/10] Step 2490 | Image: TCGA-38-4628-LUAD | Loss: 0.7616 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2994 | P(stop): 0.449
+[Epoch 7/10] Step 2500 | Image: TCGA-3M-AB46-STAD | Loss: 0.1307 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2209 | P(stop): 0.316
+[Epoch 7/10] Step 2510 | Image: TCGA-44-2666-LUAD | Loss: -0.0005 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2694 | P(stop): 0.924
+[Epoch 7/10] Step 2520 | Image: TCGA-44-6775-LUAD | Loss: -0.0026 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2478 | P(stop): 0.932
+[Epoch 7/10] Step 2530 | Image: TCGA-55-6642-LUAD | Loss: 3.0234 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1507 | P(stop): 0.487
+[Epoch 7/10] Step 2540 | Image: TCGA-55-8204-LUAD | Loss: 8.6998 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0516 | P(stop): 0.321
+[Epoch 7/10] Step 2550 | Image: TCGA-AA-3489-COAD | Loss: 1.1078 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2972 | P(stop): 0.140
+[Epoch 7/10] Step 2560 | Image: TCGA-AD-5900-COAD | Loss: 12.3903 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0924 | P(stop): 0.481
+[Epoch 7/10] Step 2570 | Image: TCGA-AG-3591-READ | Loss: 0.0332 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4161 | P(stop): 0.854
+[Epoch 7/10] Step 2580 | Image: TCGA-AZ-5407-COAD | Loss: -0.3646 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6344 | P(stop): 0.330
+[Epoch 7/10] Step 2590 | Image: TCGA-BD-A3ER-LIHC | Loss: 1.5721 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2317 | P(stop): 0.592
+[Epoch 7/10] Step 2600 | Image: TCGA-CC-A5UE-LIHC | Loss: 4.0579 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2757 | P(stop): 0.098
+[Epoch 7/10] Step 2610 | Image: TCGA-CG-5716-STAD | Loss: 2.8810 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3394 | P(stop): 0.256
+[Epoch 7/10] Step 2620 | Image: TCGA-CG-5723-STAD | Loss: 0.0306 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1606 | P(stop): 0.454
+[Epoch 7/10] Step 2630 | Image: TCGA-CK-4950-COAD | Loss: 0.0513 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4093 | P(stop): 0.540
+[Epoch 7/10] Step 2640 | Image: TCGA-CK-5913-COAD | Loss: -0.0169 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3569 | P(stop): 0.885
+[Epoch 7/10] Step 2650 | Image: TCGA-D3-A1Q6-SKCM | Loss: 0.0878 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1994 | P(stop): 0.432
+[Epoch 7/10] Step 2660 | Image: TCGA-D3-A3MO-SKCM | Loss: 2.3397 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4259 | P(stop): 0.477
+[Epoch 7/10] Step 2670 | Image: TCGA-D3-A5GL-SKCM | Loss: 0.0120 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5411 | P(stop): 0.231
+[Epoch 7/10] Step 2680 | Image: TCGA-D7-8574-STAD | Loss: 0.0503 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4478 | P(stop): 0.835
+[Epoch 7/10] Step 2690 | Image: TCGA-DA-A1I5-SKCM | Loss: -0.0174 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3499 | P(stop): 0.888
+[Epoch 7/10] Step 2700 | Image: TCGA-DD-A1EB-LIHC | Loss: -0.0075 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2950 | P(stop): 0.913
+[Epoch 7/10] Step 2710 | Image: TCGA-DD-A1EG-LIHC | Loss: 1.0621 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2421 | P(stop): 0.592
+[Epoch 7/10] Step 2720 | Image: TCGA-F2-6879-PAAD | Loss: 3.8587 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.2518 | P(stop): 0.304
+[Epoch 7/10] Step 2730 | Image: TCGA-FP-A9TM-STAD | Loss: 7.8551 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1560 | P(stop): 0.075
+[Epoch 7/10] Step 2740 | Image: TCGA-G5-6641-READ | Loss: 1.4077 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1644 | P(stop): 0.274
+[Epoch 7/10] Step 2750 | Image: TCGA-HU-A4HB-STAD | Loss: 1.1568 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3473 | P(stop): 0.236
+[Epoch 7/10] Step 2760 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.1878 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3161 | P(stop): 0.474
+[Epoch 7/10] Step 2770 | Image: TCGA-NQ-A57I-MESO | Loss: 8.7011 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1740 | P(stop): 0.618
+[Epoch 7/10] Step 2780 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0048 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2658 | P(stop): 0.925
+[Epoch 7/10] Step 2790 | Image: TCGA-V5-AASW-ESCA | Loss: 0.2136 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2882 | P(stop): 0.373
+[Epoch 7/10] Step 2800 | Image: TCGA-XT-AASU-MESO | Loss: -0.0026 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1834 | P(stop): 0.955
+
+================================================================================
+Epoch 7/10 completed in 511.44s
+================================================================================
+loss                :   4.6453 ± 29.3577
+terminal_reward     :   1.0000 ± 0.0000
+episode_return      :   2.2361 ± 4.3683
+steps               :   2.0550 ± 0.9985
+entropy             :   0.3007 ± 0.1600
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_7.pt
+
+[Epoch 8/10] Step 2810 | Image: TCGA-05-5423-LUAD | Loss: 0.0896 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4224 | P(stop): 0.850
+[Epoch 8/10] Step 2820 | Image: TCGA-18-3406-LUSC | Loss: 0.6968 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3073 | P(stop): 0.380
+[Epoch 8/10] Step 2830 | Image: TCGA-18-3408-LUSC | Loss: 1.8563 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2737 | P(stop): 0.362
+[Epoch 8/10] Step 2840 | Image: TCGA-18-3412-LUSC | Loss: 0.7989 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1191 | P(stop): 0.471
+[Epoch 8/10] Step 2850 | Image: TCGA-18-3417-LUSC | Loss: 0.2415 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5270 | P(stop): 0.714
+[Epoch 8/10] Step 2860 | Image: TCGA-18-5592-LUSC | Loss: 0.4082 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3858 | P(stop): 0.436
+[Epoch 8/10] Step 2870 | Image: TCGA-2H-A9GJ-ESCA | Loss: -0.0043 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1933 | P(stop): 0.952
+[Epoch 8/10] Step 2880 | Image: TCGA-2Y-A9GT-LIHC | Loss: 0.5489 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2351 | P(stop): 0.458
+[Epoch 8/10] Step 2890 | Image: TCGA-38-4628-LUAD | Loss: -0.0103 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2813 | P(stop): 0.919
+[Epoch 8/10] Step 2900 | Image: TCGA-3M-AB46-STAD | Loss: 0.3658 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3828 | P(stop): 0.495
+[Epoch 8/10] Step 2910 | Image: TCGA-44-2666-LUAD | Loss: 0.1325 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1422 | P(stop): 0.459
+[Epoch 8/10] Step 2920 | Image: TCGA-44-6775-LUAD | Loss: -0.0094 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5313 | P(stop): 0.777
+[Epoch 8/10] Step 2930 | Image: TCGA-55-6642-LUAD | Loss: 0.9771 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1874 | P(stop): 0.267
+[Epoch 8/10] Step 2940 | Image: TCGA-55-8204-LUAD | Loss: 6.4541 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1632 | P(stop): 0.450
+[Epoch 8/10] Step 2950 | Image: TCGA-AA-3489-COAD | Loss: -0.0065 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2716 | P(stop): 0.383
+[Epoch 8/10] Step 2960 | Image: TCGA-AD-5900-COAD | Loss: 8.3504 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2754 | P(stop): 0.380
+[Epoch 8/10] Step 2970 | Image: TCGA-AG-3591-READ | Loss: 5.6533 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4777 | P(stop): 0.603
+[Epoch 8/10] Step 2980 | Image: TCGA-AZ-5407-COAD | Loss: 3.5855 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2178 | P(stop): 0.230
+[Epoch 8/10] Step 2990 | Image: TCGA-BD-A3ER-LIHC | Loss: 2.0040 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3165 | P(stop): 0.336
+[Epoch 8/10] Step 3000 | Image: TCGA-CC-A5UE-LIHC | Loss: 4.6978 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2843 | P(stop): 0.372
+[Epoch 8/10] Step 3010 | Image: TCGA-CG-5716-STAD | Loss: 34.1629 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.3072 | P(stop): 0.138
+[Epoch 8/10] Step 3020 | Image: TCGA-CG-5723-STAD | Loss: 0.0287 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5887 | P(stop): 0.724
+[Epoch 8/10] Step 3030 | Image: TCGA-CK-4950-COAD | Loss: -0.0034 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3821 | P(stop): 0.265
+[Epoch 8/10] Step 3040 | Image: TCGA-CK-5913-COAD | Loss: -0.0608 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6916 | P(stop): 0.528
+[Epoch 8/10] Step 3050 | Image: TCGA-D3-A1Q6-SKCM | Loss: 1.5136 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1607 | P(stop): 0.271
+[Epoch 8/10] Step 3060 | Image: TCGA-D3-A3MO-SKCM | Loss: 12.1473 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4004 | P(stop): 0.438
+[Epoch 8/10] Step 3070 | Image: TCGA-D3-A5GL-SKCM | Loss: 0.9982 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5176 | P(stop): 0.420
+[Epoch 8/10] Step 3080 | Image: TCGA-D7-8574-STAD | Loss: 2.0651 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6844 | P(stop): 0.509
+[Epoch 8/10] Step 3090 | Image: TCGA-DA-A1I5-SKCM | Loss: 2.8014 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3731 | P(stop): 0.497
+[Epoch 8/10] Step 3100 | Image: TCGA-DD-A1EB-LIHC | Loss: 0.0776 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6837 | P(stop): 0.569
+[Epoch 8/10] Step 3110 | Image: TCGA-DD-A1EG-LIHC | Loss: 6.9848 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1197 | P(stop): 0.472
+[Epoch 8/10] Step 3120 | Image: TCGA-F2-6879-PAAD | Loss: -0.1093 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3278 | P(stop): 0.320
+[Epoch 8/10] Step 3130 | Image: TCGA-FP-A9TM-STAD | Loss: 7.6836 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.0927 | P(stop): 0.030
+[Epoch 8/10] Step 3140 | Image: TCGA-G5-6641-READ | Loss: 0.4557 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0883 | P(stop): 0.309
+[Epoch 8/10] Step 3150 | Image: TCGA-HU-A4HB-STAD | Loss: 5.8309 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0844 | P(stop): 0.019
+[Epoch 8/10] Step 3160 | Image: TCGA-L5-A4ON-ESCA | Loss: -0.0114 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6102 | P(stop): 0.701
+[Epoch 8/10] Step 3170 | Image: TCGA-NQ-A57I-MESO | Loss: 1.3151 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3598 | P(stop): 0.495
+[Epoch 8/10] Step 3180 | Image: TCGA-V4-A9EE-UVM | Loss: 0.1754 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.5828 | P(stop): 0.300
+[Epoch 8/10] Step 3190 | Image: TCGA-V5-AASW-ESCA | Loss: 0.2654 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3435 | P(stop): 0.291
+[Epoch 8/10] Step 3200 | Image: TCGA-XT-AASU-MESO | Loss: 3.2060 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4501 | P(stop): 0.236
+
+================================================================================
+Epoch 8/10 completed in 562.73s
+================================================================================
+loss                :   5.6083 ± 27.0799
+terminal_reward     :   1.0000 ± 0.0000
+episode_return      :   2.1332 ± 4.9109
+steps               :   2.1850 ± 0.9278
+entropy             :   0.3225 ± 0.1651
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_8.pt
+
+[Epoch 9/10] Step 3210 | Image: TCGA-05-5423-LUAD | Loss: 0.1478 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4805 | P(stop): 0.814
+[Epoch 9/10] Step 3220 | Image: TCGA-18-3406-LUSC | Loss: 0.6140 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.4596 | P(stop): 0.331
+[Epoch 9/10] Step 3230 | Image: TCGA-18-3408-LUSC | Loss: 2.4215 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1558 | P(stop): 0.316
+[Epoch 9/10] Step 3240 | Image: TCGA-18-3412-LUSC | Loss: 1.9173 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3636 | P(stop): 0.378
+[Epoch 9/10] Step 3250 | Image: TCGA-18-3417-LUSC | Loss: 2.2080 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1549 | P(stop): 0.052
+[Epoch 9/10] Step 3260 | Image: TCGA-18-5592-LUSC | Loss: 1.0775 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3292 | P(stop): 0.273
+[Epoch 9/10] Step 3270 | Image: TCGA-2H-A9GJ-ESCA | Loss: 0.0466 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4064 | P(stop): 0.859
+[Epoch 9/10] Step 3280 | Image: TCGA-2Y-A9GT-LIHC | Loss: 0.0035 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3819 | P(stop): 0.505
+[Epoch 9/10] Step 3290 | Image: TCGA-38-4628-LUAD | Loss: -0.0303 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6885 | P(stop): 0.548
+[Epoch 9/10] Step 3300 | Image: TCGA-3M-AB46-STAD | Loss: 0.5973 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.4879 | P(stop): 0.591
+[Epoch 9/10] Step 3310 | Image: TCGA-44-2666-LUAD | Loss: -0.0836 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6616 | P(stop): 0.625
+[Epoch 9/10] Step 3320 | Image: TCGA-44-6775-LUAD | Loss: 0.0127 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3518 | P(stop): 0.887
+[Epoch 9/10] Step 3330 | Image: TCGA-55-6642-LUAD | Loss: 1.0259 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1069 | P(stop): 0.248
+[Epoch 9/10] Step 3340 | Image: TCGA-55-8204-LUAD | Loss: 0.1208 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2667 | P(stop): 0.543
+[Epoch 9/10] Step 3350 | Image: TCGA-AA-3489-COAD | Loss: 0.0172 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1519 | P(stop): 0.478
+[Epoch 9/10] Step 3360 | Image: TCGA-AD-5900-COAD | Loss: 2.0730 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0846 | P(stop): 0.311
+[Epoch 9/10] Step 3370 | Image: TCGA-AG-3591-READ | Loss: -0.3159 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6163 | P(stop): 0.306
+[Epoch 9/10] Step 3380 | Image: TCGA-AZ-5407-COAD | Loss: 2.1095 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2189 | P(stop): 0.248
+[Epoch 9/10] Step 3390 | Image: TCGA-BD-A3ER-LIHC | Loss: 1.2603 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2648 | P(stop): 0.578
+[Epoch 9/10] Step 3400 | Image: TCGA-CC-A5UE-LIHC | Loss: 0.2522 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6637 | P(stop): 0.621
+[Epoch 9/10] Step 3410 | Image: TCGA-CG-5716-STAD | Loss: 1.5449 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3752 | P(stop): 0.241
+[Epoch 9/10] Step 3420 | Image: TCGA-CG-5723-STAD | Loss: -0.0111 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5549 | P(stop): 0.757
+[Epoch 9/10] Step 3430 | Image: TCGA-CK-4950-COAD | Loss: 1.0692 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0807 | P(stop): 0.313
+[Epoch 9/10] Step 3440 | Image: TCGA-CK-5913-COAD | Loss: -0.0115 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4564 | P(stop): 0.830
+[Epoch 9/10] Step 3450 | Image: TCGA-D3-A1Q6-SKCM | Loss: 0.8985 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1221 | P(stop): 0.467
+[Epoch 9/10] Step 3460 | Image: TCGA-D3-A3MO-SKCM | Loss: -0.0034 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2832 | P(stop): 0.918
+[Epoch 9/10] Step 3470 | Image: TCGA-D3-A5GL-SKCM | Loss: 0.0121 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3519 | P(stop): 0.887
+[Epoch 9/10] Step 3480 | Image: TCGA-D7-8574-STAD | Loss: 5.5031 | Terminal R: 1.0000 | Steps: 5 | Entropy: 0.1789 | P(stop): 0.269
+[Epoch 9/10] Step 3490 | Image: TCGA-DA-A1I5-SKCM | Loss: 2.6903 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1588 | P(stop): 0.452
+[Epoch 9/10] Step 3500 | Image: TCGA-DD-A1EB-LIHC | Loss: -1.2148 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2730 | P(stop): 0.078
+[Epoch 9/10] Step 3510 | Image: TCGA-DD-A1EG-LIHC | Loss: 8.2078 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3110 | P(stop): 0.512
+[Epoch 9/10] Step 3520 | Image: TCGA-F2-6879-PAAD | Loss: 0.1173 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2309 | P(stop): 0.487
+[Epoch 9/10] Step 3530 | Image: TCGA-FP-A9TM-STAD | Loss: 1.9121 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0593 | P(stop): 0.490
+[Epoch 9/10] Step 3540 | Image: TCGA-G5-6641-READ | Loss: 0.0002 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2408 | P(stop): 0.935
+[Epoch 9/10] Step 3550 | Image: TCGA-HU-A4HB-STAD | Loss: 0.7766 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1151 | P(stop): 0.036
+[Epoch 9/10] Step 3560 | Image: TCGA-L5-A4ON-ESCA | Loss: -0.0034 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1494 | P(stop): 0.966
+[Epoch 9/10] Step 3570 | Image: TCGA-NQ-A57I-MESO | Loss: 8.5149 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0626 | P(stop): 0.486
+[Epoch 9/10] Step 3580 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0059 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2774 | P(stop): 0.921
+[Epoch 9/10] Step 3590 | Image: TCGA-V5-AASW-ESCA | Loss: 0.5827 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1434 | P(stop): 0.283
+[Epoch 9/10] Step 3600 | Image: TCGA-XT-AASU-MESO | Loss: -0.0044 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2918 | P(stop): 0.915
+
+================================================================================
+Epoch 9/10 completed in 503.13s
+================================================================================
+loss                :   4.9153 ± 30.9071
+terminal_reward     :   1.0000 ± 0.0000
+episode_return      :   2.2380 ± 4.6843
+steps               :   2.0375 ± 0.9006
+entropy             :   0.2808 ± 0.1613
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_9.pt
+
+[Epoch 10/10] Step 3610 | Image: TCGA-05-5423-LUAD | Loss: -0.0097 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.2522 | P(stop): 0.931
+[Epoch 10/10] Step 3620 | Image: TCGA-18-3406-LUSC | Loss: 0.9283 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1287 | P(stop): 0.292
+[Epoch 10/10] Step 3630 | Image: TCGA-18-3408-LUSC | Loss: -0.0189 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3904 | P(stop): 0.868
+[Epoch 10/10] Step 3640 | Image: TCGA-18-3412-LUSC | Loss: 2.0226 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6159 | P(stop): 0.589
+[Epoch 10/10] Step 3650 | Image: TCGA-18-3417-LUSC | Loss: 1.1773 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2412 | P(stop): 0.446
+[Epoch 10/10] Step 3660 | Image: TCGA-18-5592-LUSC | Loss: 0.2353 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5645 | P(stop): 0.748
+[Epoch 10/10] Step 3670 | Image: TCGA-2H-A9GJ-ESCA | Loss: 0.0541 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.6293 | P(stop): 0.677
+[Epoch 10/10] Step 3680 | Image: TCGA-2Y-A9GT-LIHC | Loss: 0.0243 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.0794 | P(stop): 0.985
+[Epoch 10/10] Step 3690 | Image: TCGA-38-4628-LUAD | Loss: -0.0038 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.1173 | P(stop): 0.975
+[Epoch 10/10] Step 3700 | Image: TCGA-3M-AB46-STAD | Loss: 8.4348 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0668 | P(stop): 0.486
+[Epoch 10/10] Step 3710 | Image: TCGA-44-2666-LUAD | Loss: 0.0270 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1137 | P(stop): 0.470
+[Epoch 10/10] Step 3720 | Image: TCGA-44-6775-LUAD | Loss: -0.8100 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.4781 | P(stop): 0.184
+[Epoch 10/10] Step 3730 | Image: TCGA-55-6642-LUAD | Loss: 2.9601 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.1565 | P(stop): 0.173
+[Epoch 10/10] Step 3740 | Image: TCGA-55-8204-LUAD | Loss: 4.3745 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0878 | P(stop): 0.479
+[Epoch 10/10] Step 3750 | Image: TCGA-AA-3489-COAD | Loss: 0.0765 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1623 | P(stop): 0.450
+[Epoch 10/10] Step 3760 | Image: TCGA-AD-5900-COAD | Loss: 3.0883 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2205 | P(stop): 0.588
+[Epoch 10/10] Step 3770 | Image: TCGA-AG-3591-READ | Loss: -0.0496 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5973 | P(stop): 0.715
+[Epoch 10/10] Step 3780 | Image: TCGA-AZ-5407-COAD | Loss: -0.7734 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.3615 | P(stop): 0.117
+[Epoch 10/10] Step 3790 | Image: TCGA-BD-A3ER-LIHC | Loss: 0.7690 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1619 | P(stop): 0.450
+[Epoch 10/10] Step 3800 | Image: TCGA-CC-A5UE-LIHC | Loss: 0.0357 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.2423 | P(stop): 0.408
+[Epoch 10/10] Step 3810 | Image: TCGA-CG-5716-STAD | Loss: 20.7453 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.0953 | P(stop): 0.227
+[Epoch 10/10] Step 3820 | Image: TCGA-CG-5723-STAD | Loss: -0.2049 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3792 | P(stop): 0.256
+[Epoch 10/10] Step 3830 | Image: TCGA-CK-4950-COAD | Loss: 10.6328 | Terminal R: 1.0000 | Steps: 4 | Entropy: 0.2859 | P(stop): 0.232
+[Epoch 10/10] Step 3840 | Image: TCGA-CK-5913-COAD | Loss: 2.0341 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1614 | P(stop): 0.312
+[Epoch 10/10] Step 3850 | Image: TCGA-D3-A1Q6-SKCM | Loss: 1.7416 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.3040 | P(stop): 0.356
+[Epoch 10/10] Step 3860 | Image: TCGA-D3-A3MO-SKCM | Loss: 6.6255 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1389 | P(stop): 0.460
+[Epoch 10/10] Step 3870 | Image: TCGA-D3-A5GL-SKCM | Loss: 0.1324 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3140 | P(stop): 0.380
+[Epoch 10/10] Step 3880 | Image: TCGA-D7-8574-STAD | Loss: 0.1302 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.6108 | P(stop): 0.544
+[Epoch 10/10] Step 3890 | Image: TCGA-DA-A1I5-SKCM | Loss: 2.1371 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.0368 | P(stop): 0.493
+[Epoch 10/10] Step 3900 | Image: TCGA-DD-A1EB-LIHC | Loss: 0.2801 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.2982 | P(stop): 0.452
+[Epoch 10/10] Step 3910 | Image: TCGA-DD-A1EG-LIHC | Loss: 0.5802 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0584 | P(stop): 0.326
+[Epoch 10/10] Step 3920 | Image: TCGA-F2-6879-PAAD | Loss: 0.2696 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1364 | P(stop): 0.461
+[Epoch 10/10] Step 3930 | Image: TCGA-FP-A9TM-STAD | Loss: 2.7671 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0301 | P(stop): 0.329
+[Epoch 10/10] Step 3940 | Image: TCGA-G5-6641-READ | Loss: 0.4672 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1310 | P(stop): 0.501
+[Epoch 10/10] Step 3950 | Image: TCGA-HU-A4HB-STAD | Loss: 2.2653 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.0870 | P(stop): 0.335
+[Epoch 10/10] Step 3960 | Image: TCGA-L5-A4ON-ESCA | Loss: 0.3745 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.3465 | P(stop): 0.255
+[Epoch 10/10] Step 3970 | Image: TCGA-NQ-A57I-MESO | Loss: 0.6471 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.1482 | P(stop): 0.456
+[Epoch 10/10] Step 3980 | Image: TCGA-V4-A9EE-UVM | Loss: -0.0432 | Terminal R: 1.0000 | Steps: 1 | Entropy: 0.5646 | P(stop): 0.748
+[Epoch 10/10] Step 3990 | Image: TCGA-V5-AASW-ESCA | Loss: 0.0408 | Terminal R: 1.0000 | Steps: 3 | Entropy: 0.1760 | P(stop): 0.074
+[Epoch 10/10] Step 4000 | Image: TCGA-XT-AASU-MESO | Loss: 20.4640 | Terminal R: 1.0000 | Steps: 2 | Entropy: 0.5606 | P(stop): 0.728
+
+================================================================================
+Epoch 10/10 completed in 549.16s
+================================================================================
+loss                :   2.9976 ± 7.9019
+terminal_reward     :   1.0000 ± 0.0000
+episode_return      :   1.8601 ± 3.4318
+steps               :   2.1575 ± 1.0162
+entropy             :   0.2555 ± 0.1719
+================================================================================
+
+Checkpoint saved: data/models/rl/a2c_baseline/a2c_baseline_epoch_10.pt
+
+Training complete!
+Final model saved: data/models/rl/a2c_baseline/a2c_baseline_final.pt
+jay@MacBookPro ~/D/MA (main)>                                                                                                                              (base) 

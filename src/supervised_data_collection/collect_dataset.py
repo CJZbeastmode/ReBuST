@@ -3,6 +3,8 @@ from pathlib import Path
 import time
 import argparse
 
+from openslide import OpenSlideUnsupportedFormatError
+
 # ---------------------------------------------------------------------
 # Ensure the repository root is on sys.path so `src` is importable
 # This allows running the script directly via:
@@ -61,7 +63,7 @@ def maybe_backup(states, scores, zoom_decisions, out_npz=None):
 # =====================================================================
 def collect_dataset(
     images_dir: str = "data/images",
-    out_npz: str = "data/score_dataset/score_regressor_text_alignment_score.npz",
+    out_npz: str = "data/supervised_dataset/score_regressor_text_alignment_score.npz",
     max_samples: int = None,
     random_seed: int = None,
     score_module="text_align_score",
@@ -101,10 +103,6 @@ def collect_dataset(
     if len(image_paths) == 0:
         raise ValueError(f"No WSI files found in {images_dir}")
 
-    # Optional randomization of image order
-    rng = np.random.default_rng(random_seed)
-    rng.shuffle(image_paths)
-
     # Storage buffers
     states = []
     scores = []
@@ -117,13 +115,21 @@ def collect_dataset(
     t0 = time.time()
     for image_path in image_paths:
         print(
-            f"Processing image ({image_paths.index(image_path)+1}/{len(image_paths)})"
+            f"Processing image {image_path} ({image_paths.index(image_path)+1}/{len(image_paths)})"
         )
 
-        if img_embedding_backend == "plip":
-            wsi = WSI(image_path, img_embedding_backend="plip")
-        elif img_embedding_backend == "conch":
-            wsi = WSI(image_path, img_embedding_backend="conch")
+        try:
+            wsi = WSI(image_path, img_embedding_backend=img_embedding_backend)
+        except OpenSlideUnsupportedFormatError as e:
+            print(f"[SKIP] OpenSlide cannot read: {image_path}")
+            continue
+        except FileNotFoundError:
+            print(f"[SKIP] Missing file: {image_path}")
+            continue
+        except Exception as e:
+            print(f"[SKIP] Unknown error opening {image_path}: {e}")
+            continue
+
         env = DynamicPatchEnv(
             wsi,
             patch_score=score_module,

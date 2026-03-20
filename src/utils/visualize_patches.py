@@ -8,14 +8,36 @@ from PIL import Image
 def generate_visualization(
     wsi,
     all_patches_count,
-    patches_with_meta,
-    discarded_with_meta=None,
+    kept,  # List[Tuple[patch, meta]] where meta = {"level": int, "x": int, "y": int}
+    zoomed=None,  # List[Tuple[patch, meta]] where meta = {"level": int, "x": int, "y": int}
     output_html="./data/visualization.html",
 ):
-    """Render an HTML overlay of kept/discarded patches on the WSI thumbnail."""
+    """
+    Render an HTML overlay of kept/zoomed patches on the WSI thumbnail.
+    
+    Parameters
+    ----------
+    wsi : WSI
+        WSI object with slide and level information
+    all_patches_count : int
+        Total number of patches considered
+    kept : List[Tuple[patch, dict]]
+        List of (patch, metadata) tuples for patches that were kept.
+        Each metadata dict should contain: {"level": int, "x": int, "y": int}
+    zoomed : List[Tuple[patch, dict]], optional
+        List of (patch, metadata) tuples for patches that were zoomed past.
+        Each metadata dict should contain: {"level": int, "x": int, "y": int}
+    output_html : str
+        Path to save the HTML visualization file
+        
+    Returns
+    -------
+    str
+        Path to the saved HTML file
+    """
 
-    if discarded_with_meta is None:
-        discarded_with_meta = []
+    if zoomed is None:
+        zoomed = []
 
     # -------------------------------------------------------------------------
     # 1. Load thumbnail at max_level (coarsest level)
@@ -89,16 +111,13 @@ def generate_visualization(
 
     # Colors per level for kept patches
     kept_color = "#00FF00"
-    discarded_color = "#FF0000"
+    zoomed_color = "#FF0000"
 
     kept_counts = {}
-    discarded_counts = {}
+    zoomed_counts = {}
 
     # Kept patches
-    for patch, meta in patches_with_meta:
-        lvl = meta["level"]
-        x = meta["x"]
-        y = meta["y"]
+    for lvl, x, y in kept:
 
         X, Y, S = to_thumb(lvl, x, y, wsi.patch_size)
 
@@ -115,22 +134,19 @@ def generate_visualization(
             }
         )
 
-    # Discarded patches
-    for patch, meta in discarded_with_meta:
-        lvl = meta["level"]
-        x = meta["x"]
-        y = meta["y"]
+    # Zoomed patches
+    for lvl, x, y in zoomed:
 
         X, Y, S = to_thumb(lvl, x, y, wsi.patch_size)
 
-        discarded_counts[lvl] = discarded_counts.get(lvl, 0) + 1
+        zoomed_counts[lvl] = zoomed_counts.get(lvl, 0) + 1
         overlays.append(
             {
                 "x": X,
                 "y": Y,
                 "size": S,
                 "level": lvl,
-                "type": "discarded",
+                "type": "zoomed",
                 "orig_x": x,
                 "orig_y": y,
             }
@@ -139,12 +155,12 @@ def generate_visualization(
     # -------------------------------------------------------------------------
     # 4. Build HTML
     # -------------------------------------------------------------------------
-    level_ids = sorted(set(list(kept_counts.keys()) + list(discarded_counts.keys())))
+    level_ids = sorted(set(list(kept_counts.keys()) + list(zoomed_counts.keys())))
     if not level_ids:
         level_ids = [thumb_level]
 
     level_state_json = json.dumps(
-        {lvl: {"kept": True, "discarded": True} for lvl in level_ids}
+        {lvl: {"kept": True, "zoomed": True} for lvl in level_ids}
     )
 
     html = f"""<!DOCTYPE html>
@@ -277,8 +293,8 @@ def generate_visualization(
 
     # Overlays go inside the container
     for ov in overlays:
-        if ov["type"] == "discarded":
-            fill = discarded_color
+        if ov["type"] == "zoomed":
+            fill = zoomed_color
             border = "#660000"
         else:
             fill = kept_color
@@ -305,8 +321,8 @@ def generate_visualization(
         <div id="control-panel">
             <h3>WSI Patch Visualization</h3>
             <div>All patches: <strong>{all_patches_count}</strong></div>
-            <div>Kept patches: <strong>{len(patches_with_meta)}</strong></div>
-            <div>Discarded patches: <strong>{all_patches_count - len(patches_with_meta)}</strong></div>
+            <div>Kept patches: <strong>{len(kept)}</strong></div>
+            <div>Zoomed patches: <strong>{all_patches_count - len(kept)}</strong></div>
             <div>Thumbnail level: <strong>{thumb_level}</strong></div>
             <div>Thumbnail size: <strong>{thumb_w} × {thumb_h}</strong></div>
             <div class="legend">
@@ -314,12 +330,12 @@ def generate_visualization(
                     <button type="button" onclick="showAllLevels()">Show All</button>
                 </div>
                 <strong>Per-level visibility</strong><br>
-                <small>(green = kept, red = discarded)</small>
+                <small>(green = kept, red = zoomed)</small>
 """
 
     for lvl in level_ids:
         kept_cnt = kept_counts.get(lvl, 0)
-        disc_cnt = discarded_counts.get(lvl, 0)
+        zoomed_cnt = zoomed_counts.get(lvl, 0)
         html += f"""
                 <div class="legend-level">
                     <div class="legend-level-header">
@@ -332,9 +348,9 @@ def generate_visualization(
                         <label for="toggle-kept-lvl-{lvl}">Kept ({kept_cnt})</label>
                     </div>
                     <div class="legend-item">
-                        <input type="checkbox" class="legend-checkbox" id="toggle-discarded-lvl-{lvl}" checked onchange="toggleLevelType({lvl}, 'discarded')">
-                        <div class="legend-color" style="background: {discarded_color};"></div>
-                        <label for="toggle-discarded-lvl-{lvl}">Discarded ({disc_cnt})</label>
+                        <input type="checkbox" class="legend-checkbox" id="toggle-zoomed-lvl-{lvl}" checked onchange="toggleLevelType({lvl}, 'zoomed')">
+                        <div class="legend-color" style="background: {zoomed_color};"></div>
+                        <label for="toggle-zoomed-lvl-{lvl}">Zoomed ({zoomed_cnt})</label>
                     </div>
                 </div>
 """
@@ -353,7 +369,7 @@ def generate_visualization(
             overlays.forEach(function(overlay) {{
                 const lvl = parseInt(overlay.dataset.level, 10);
                 const patchType = overlay.dataset.type;
-                if (!levelState[lvl]) levelState[lvl] = {{ kept: true, discarded: true }};
+                if (!levelState[lvl]) levelState[lvl] = {{ kept: true, zoomed: true }};
                 const typeVisible = levelState[lvl][patchType] !== false;
                 const soloVisible = soloLevel === null || soloLevel === lvl;
                 overlay.style.display = typeVisible && soloVisible ? 'block' : 'none';
@@ -361,7 +377,7 @@ def generate_visualization(
         }}
 
         function toggleLevelType(level, patchType) {{
-            if (!levelState[level]) levelState[level] = {{ kept: true, discarded: true }};
+            if (!levelState[level]) levelState[level] = {{ kept: true, zoomed: true }};
             const checkbox = document.getElementById('toggle-' + patchType + '-lvl-' + level);
             levelState[level][patchType] = checkbox ? checkbox.checked : true;
             updatePatchVisibility();
@@ -375,7 +391,7 @@ def generate_visualization(
         function showAllLevels() {{
             soloLevel = null;
             Object.keys(levelState).forEach(function(levelKey) {{
-                ['kept', 'discarded'].forEach(function(type) {{
+                ['kept', 'zoomed'].forEach(function(type) {{
                     levelState[levelKey][type] = true;
                     const checkbox = document.getElementById('toggle-' + type + '-lvl-' + levelKey);
                     if (checkbox) checkbox.checked = true;

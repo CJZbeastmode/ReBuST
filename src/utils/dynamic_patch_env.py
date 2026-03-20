@@ -33,7 +33,7 @@ class DynamicPatchEnv:
         patch_score_aggregation=None,
         patch_size=256,
         max_steps=8,
-        backup_dir="data/score_dataset/env_backups",
+        backup_dir="data/supervised_dataset/env_backups",
         backup_interval=10,
     ):
         """
@@ -89,8 +89,12 @@ class DynamicPatchEnv:
                 embedder=self.embedder,
                 agg=patch_score_aggregation,
             )
+        
+        #print("Sampling root patches by density...")
+        #self.root_patch_cache = self.sample_root_by_density(n_dense=4, n_mid=3, n_sparse=3)
 
-        print(f"Initialized DynamicPatchEnv with patch score module: {patch_score}")
+        # Uncomment for debugging:
+        # print(f"Initialized DynamicPatchEnv with patch score module: {patch_score}")
 
     # ---------------------------------------------------------
     # Helper methods
@@ -112,12 +116,87 @@ class DynamicPatchEnv:
         This encourages spatial diversity at episode initialization
         while keeping the initial observation computationally cheap.
         """
+        #if len(self.root_patch_cache) > 0:
+        #    ret_patch = self.root_patch_cache[0]
+        #    self.root_patch_cache = self.root_patch_cache[1:]
+        #    lvl, x, y, _ = ret_patch
+        #    return lvl, x, y
+        
         lvl = self.max_level
         W, H = self.wsi.levels_info[lvl]["size"]
 
         x = np.random.randint(0, max(1, W - self.patch_size))
         y = np.random.randint(0, max(1, H - self.patch_size))
         return lvl, x, y
+    
+    def sample_root_by_density(self, n_dense=4, n_mid=3, n_sparse=3):
+        """
+        Sample n_dense, n_mid, and n_sparse tissue patches from the root (coarsest) pyramid level based on tissue density.
+        
+        Dense: highest tissue density (most tissue)
+        Sparse: lowest tissue density (least tissue)
+        Mid: middle tissue density
+        
+        Returns:
+            List of tuples: [(level, x, y, density_type)]
+        """
+        lvl = self.max_level
+        W, H = self.wsi.levels_info[lvl]["size"]
+        stride = self.patch_size
+        coords = []
+        # Grid sampling over the root level
+        for x in range(0, W - stride + 1, stride):
+            for y in range(0, H - stride + 1, stride):
+                coords.append((x, y))
+
+        density_patches = []
+        for x, y in coords:
+            try:
+                patch = self.wsi.get_patch(lvl, x, y)
+                # Calculate tissue density: simply count non-background pixels
+                tissue_density = self.calculate_tissue_density(patch)
+                density_patches.append((lvl, x, y, tissue_density))
+            except Exception:
+                continue
+
+        # Sort patches by tissue density
+        density_patches.sort(key=lambda tup: tup[3], reverse=True)
+
+        # Select dense, sparse, and mid patches
+        dense = density_patches[:n_dense]
+        sparse = density_patches[-n_sparse:] if n_sparse > 0 else []
+        mid_start = max(n_dense, (len(density_patches) - n_mid) // 2)
+        mid = density_patches[mid_start:mid_start + n_mid] if n_mid > 0 else []
+
+        # Annotate density type
+        dense = [(lvl, x, y, 'dense') for (lvl, x, y, _) in dense]
+        mid = [(lvl, x, y, 'mid') for (lvl, x, y, _) in mid]
+        sparse = [(lvl, x, y, 'sparse') for (lvl, x, y, _) in sparse]
+
+        return dense + mid + sparse
+
+    def calculate_tissue_density(self, patch):
+        """
+        Calculate the tissue density of a given patch. This function counts the number of non-background pixels
+        in the patch to estimate tissue density. 
+        Returns a value between 0 (no tissue) and 1 (completely full of tissue).
+        """
+        # Convert patch to a binary mask (tissue vs. background)
+        # Assuming a method `is_tissue_pixel` to check if a pixel is part of tissue
+        tissue_pixels = sum(1 for pixel in patch if self.is_tissue_pixel(pixel))
+        total_pixels = len(patch)
+        
+        # Return density as the proportion of tissue pixels
+        return tissue_pixels / total_pixels if total_pixels > 0 else 0
+
+    def is_tissue_pixel(self, pixel):
+        """
+        Check if a pixel is considered as tissue (non-background). 
+        This is just a placeholder, you might use a thresholding or color-based method.
+        """
+        # For now, assuming a simplistic threshold on the pixel value
+        # Adjust this depending on how you define tissue in your images
+        return pixel > 0  # Example: non-zero pixel is considered tissue
 
     def _safe_embed(self, patch):
         """
@@ -335,36 +414,59 @@ class DynamicPatchEnv:
             print(f"[ENV STEP WARNING #{self.env_error_count}] {e}")
             return self._blank_state(), -1.0, True, {"type": "env_failure"}
 
+
     def _step_impl(self, action):
         """
-        Internal step logic implementing symmetric STOP vs ZOOM rewards.
+        Internal step logic implementing STOP vs ZOOM transitions.
 
-        Reward formulation:
-            r = score(action) - score(other_action)
-
-        ZOOM actions incur a small penalty to prevent degenerate policies
-        that always descend the pyramid.
+        Core principles of this implementation:
+        ---------------------------------------
+        1. Reward depends ONLY on the chosen action (MDP requirement)
+        2. Relative preference (zoom vs stop) is delegated to PatchScoreModule
+        3. ZOOM cost is NOT baked into reward (handled externally by RL)
+        4. Transition stochasticity is minimized
         """
-        done = False
 
+        done = False
+        info = {}
+
+        # ---------------------------------------------------------
+        # 1. Get parent patch (current state)
+        # ---------------------------------------------------------
         try:
-            parent_patch = self.wsi.get_patch(self.curr_level, self.curr_x, self.curr_y)
+            parent_patch = self.wsi.get_patch(
+                self.curr_level, self.curr_x, self.curr_y
+            )
         except Exception:
+            # unrecoverable → terminate episode
             return self._blank_state(), -1.0, True, {"invalid": True}
 
+        # ---------------------------------------------------------
+        # 2. Compute STOP score (always available)
+        # ---------------------------------------------------------
         try:
-            s_stop = self.patch_score_module.compute_stop(parent_patch=parent_patch)
+            s_stop = float(
+                self.patch_score_module.compute_stop(parent_patch=parent_patch)
+            )
         except Exception:
-            s_stop = -1.0
+            s_stop = 0.0
 
-        s_zoom = -np.inf
+        # ---------------------------------------------------------
+        # 3. Compute ZOOM score (only if zoom is possible)
+        # ---------------------------------------------------------
+        s_zoom = None
         child_patches = []
         child_coords = []
-        invalid = False
 
         if self.curr_level > self.min_level:
             child_level = self.curr_level - 1
-            grids = self.wsi.get_child_grid(self.curr_level, self.curr_x, self.curr_y)
+
+            try:
+                grids = self.wsi.get_child_grid(
+                    self.curr_level, self.curr_x, self.curr_y
+                )
+            except Exception:
+                grids = []
 
             for grid in grids:
                 for cx, cy in grid:
@@ -373,50 +475,90 @@ class DynamicPatchEnv:
                         child_patches.append(patch)
                         child_coords.append((cx, cy))
                     except Exception:
-                        invalid = True
+                        continue
 
             if child_patches:
                 try:
-                    s_zoom = self.patch_score_module.compute_zoom(
-                        parent_patch=parent_patch,
-                        child_patches=child_patches,
+                    s_zoom = float(
+                        self.patch_score_module.compute_zoom(
+                            parent_patch=parent_patch,
+                            child_patches=child_patches,
+                        )
                     )
                 except Exception:
-                    s_zoom = -np.inf
+                    s_zoom = 0.0
 
+        # ---------------------------------------------------------
+        # 4. Execute action
+        # ---------------------------------------------------------
         if action == 0:  # STOP
-            r = s_stop - s_zoom
+            # ---------------------------------------------
+            # Reward is STOP score only
+            # ---------------------------------------------
+            reward = s_stop
             done = True
             next_state = None
             action_name = "STOP"
+
         else:  # ZOOM
-            r = s_zoom - s_stop - 0.05
-            if not child_patches:
+            if s_zoom is None or not child_patches:
+                # Cannot zoom → forced termination
+                reward = s_stop
                 done = True
                 next_state = None
                 action_name = "FORCED_STOP"
+
             else:
-                idx = np.random.randint(len(child_patches))
+                # -----------------------------------------
+                # Select next child deterministically
+                # (minimizes transition noise)
+                # -----------------------------------------
+                idx = np.argmax([
+                    self.patch_score_module.compute_stop(parent_patch=p)
+                    for p in child_patches
+                ])
+
                 self.curr_level -= 1
                 self.curr_x, self.curr_y = child_coords[idx]
                 self.curr_patch = child_patches[idx]
 
                 self.steps += 1
                 self.zoom_count += 1
-                if self.steps >= self.max_steps:
-                    done = True
 
-                next_state = self._get_state(self.curr_patch)
+                reward = s_zoom
                 action_name = "ZOOM"
 
-        r = float(np.clip(r / 10.0, -1.0, 1.0))
+                if self.steps >= self.max_steps:
+                    done = True
+                    next_state = None
+                else:
+                    next_state = self._get_state(self.curr_patch)
 
-        info = {
-            "s_stop": float(s_stop),
-            "s_zoom": float(s_zoom) if np.isfinite(s_zoom) else None,
+        # ---------------------------------------------------------
+        # 5. Optional: score diagnostics (NOT used for reward)
+        # ---------------------------------------------------------
+        try:
+            s_diff = float(
+                self.patch_score_module.compute_diff(
+                    s_stop=s_stop, s_zoom=s_zoom
+                )
+            )
+        except Exception:
+            s_diff = None
+
+        info.update({
             "action": action_name,
-            "invalid": invalid,
-            "env_errors": self.env_error_count,
-        }
+            "s_stop": s_stop,
+            "s_zoom": s_zoom,
+            "s_diff": s_diff,
+            "level": self.curr_level,
+            "zoom_count": self.zoom_count,
+        })
 
-        return next_state, r, done, info
+        # ---------------------------------------------------------
+        # 6. Final reward normalization (optional but consistent)
+        # ---------------------------------------------------------
+        reward = float(np.clip(reward, -1.0, 1.0))
+
+        return next_state, reward, done, info
+

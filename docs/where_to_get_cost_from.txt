@@ -1,0 +1,202 @@
+jay@MacBookPro ~/D/MA (main)> python src/inference/greedy_infer.py                                                                              (base) 
+/Users/jay/miniconda3/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Loading WSI: ./data/to_test_image/test_img_1.svs
+Using a slow image processor as `use_fast` is unset and a slow processor was saved with this model. `use_fast=True` will be the default behavior in v4.52, even if the model was saved with a slow processor. This will result in minor differences in outputs. You'll still be able to use a slow processor with `use_fast=False`.
+Sampling root patches by density...
+Initialized DynamicPatchEnv with patch score module: text_align_score
+Asking to truncate to max_length but no maximum length is provided and the model has no predefined maximum length. Default to no truncation.
+Score for ZOOM: 36.75
+Score for STOP: 37.0
+Score for STOP: 38.0
+Score for STOP: 38.0
+Reached terminal level 1, keeping all children
+Score for ZOOM: 35.0
+Score for STOP: 38.0
+Score for STOP: 39.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 38.25
+Score for STOP: 39.0
+Score for STOP: 39.0
+Score for STOP: 38.0
+Score for STOP: 37.0
+Score for ZOOM: 36.75
+Score for STOP: 38.0
+Score for STOP: 40.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 38.75
+Score for STOP: 39.0
+Score for STOP: 40.0
+Reached terminal level 1, keeping all children
+Score for STOP: 41.0
+Score for STOP: 41.0
+Score for STOP: 37.0
+Score for ZOOM: 37.5
+Score for STOP: 37.0
+Reached terminal level 1, keeping all children
+Score for STOP: 37.0
+Score for STOP: 38.0
+Score for STOP: 39.0
+Score for ZOOM: 37.75
+Score for STOP: 41.0
+Score for STOP: 38.0
+Score for STOP: 38.0
+Reached terminal level 1, keeping all children
+Score for ZOOM: 34.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 37.25
+Score for STOP: 41.0
+Score for STOP: 40.0
+Reached terminal level 1, keeping all children
+Score for STOP: 37.0
+Score for ZOOM: 39.75
+Score for STOP: 40.0
+Score for STOP: 43.0
+Score for STOP: 42.0
+Reached terminal level 1, keeping all children
+Score for ZOOM: 37.5
+Score for STOP: 40.0
+Score for STOP: 38.0
+Reached terminal level 1, keeping all children
+Score for STOP: 38.0
+Score for ZOOM: 40.25
+Score for STOP: 43.0
+Score for STOP: 43.0
+Score for STOP: 36.0
+Score for STOP: 39.0
+Score for STOP: 35.0
+Score for STOP: 41.0
+Score for ZOOM: 36.75
+Reached terminal level 1, keeping all children
+Score for STOP: 37.0
+Score for STOP: 39.0
+Score for STOP: 38.0
+Score for ZOOM: 32.25
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 30.5
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for STOP: 36.0
+Score for ZOOM: 32.25
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 38.0
+Score for STOP: 36.0
+Score for STOP: 45.0
+Reached terminal level 1, keeping all children
+Score for STOP: 39.0
+Score for STOP: 41.0
+Score for STOP: 41.0
+Score for STOP: 46.0
+Score for ZOOM: 40.25
+Score for STOP: 40.0
+Score for STOP: 37.0
+Score for STOP: 42.0
+Score for STOP: 42.0
+Score for STOP: 41.0
+Score for ZOOM: 34.75
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for STOP: 38.0
+Score for ZOOM: 29.75
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 32.25
+Score for STOP: 35.0
+Score for STOP: 34.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for ZOOM: 32.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for STOP: 33.0
+Score for STOP: 39.0
+Score for ZOOM: 39.0
+Score for STOP: 39.0
+Score for STOP: 38.0
+Score for STOP: 39.0
+Score for STOP: 40.0
+Score for ZOOM: 39.5
+Score for STOP: 38.0
+Score for STOP: 41.0
+Score for STOP: 37.0
+Score for STOP: 42.0
+Score for STOP: 42.0
+Score for ZOOM: 39.75
+Score for STOP: 39.0
+Score for STOP: 37.0
+Score for STOP: 40.0
+Score for STOP: 43.0
+Score for ZOOM: 36.0
+Reached terminal level 1, keeping all children
+Reached terminal level 1, keeping all children
+Score for STOP: 42.0
+Score for STOP: 39.0
+Score for ZOOM: 39.25
+Reached terminal level 1, keeping all children
+Score for STOP: 42.0
+Score for STOP: 40.0
+Score for STOP: 40.0
+Score for ZOOM: 41.75
+Score for STOP: 41.0
+Score for STOP: 43.0
+Score for STOP: 41.0
+Score for STOP: 42.0
+Score for ZOOM: 42.0
+Score for STOP: 42.0
+Score for STOP: 44.0
+Score for STOP: 41.0
+Score for STOP: 41.0
+Score for ZOOM: 39.0
+Score for STOP: 37.0
+Score for STOP: 39.0
+Score for STOP: 41.0
+Score for STOP: 39.0
+Score for ZOOM: 40.75
+Score for STOP: 42.0
+Score for STOP: 41.0
+Score for STOP: 40.0
+Score for STOP: 40.0
+Score for ZOOM: 38.75
+Score for STOP: 38.0
+Score for STOP: 37.0
+Score for STOP: 41.0
+Score for STOP: 39.0
+Score for ZOOM: 40.5
+Score for STOP: 40.0
+Score for STOP: 43.0
+Score for STOP: 39.0
+Score for STOP: 40.0
+Score for ZOOM: 40.25
+Score for STOP: 39.0
+Score for STOP: 40.0
+Score for STOP: 41.0
+Score for STOP: 41.0
+Score for STOP: 41.0
+Score for ZOOM: 40.0
+Score for STOP: 39.0
+Reached terminal level 1, keeping all children
+Score for STOP: 44.0
+Score for STOP: 41.0
+Score for STOP: 39.0
+All patches:  2562
+Kept patches: 813
+Discarded:    1749
+Visualization saved to: ./data/visualization.html
+Visualization opened.
+jay@MacBookPro ~/D/MA (main)>                                                                                                                   (base) 

@@ -33,3 +33,5 @@ model_doc/*
 
 *.sh
 *.fish
+
+backup/*

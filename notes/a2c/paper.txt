@@ -1,0 +1,8 @@
+https://arxiv.org/abs/1602.01783
+https://dvl.in.tum.de/slides/automl-ss19/02_winkelbauer_a3c.pdf
+https://proceedings.neurips.cc/paper_files/paper/1999/file/464d828b85b0bed98e80ade0a5c43b0f-Paper.pdf
+https://proceedings.neurips.cc/paper_files/paper/1999/file/6449f44a102fde848669bdd9eb6b76fa-Paper.pdf
+https://www.jmlr.org/papers/volume5/greensmith04a/greensmith04a.pdf
+
+
+https://www-sop.inria.fr/members/Eitan.Altman/TEMP/h.pdf (Contraint Markov)

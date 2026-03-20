@@ -34,14 +34,10 @@ if repo_root not in sys.path:
 
 import argparse
 import os
-import webbrowser
-from src.utils.wsi import WSI
-
 from src.utils.wsi import WSI
 from src.utils.dynamic_patch_env import DynamicPatchEnv
 from src.utils.embedder import Embedder
 from src.utils.patch_scores import *
-from src.utils.visualize_patches import generate_visualization
 
 # ADDED COMMENT:
 # Imports intentionally mirror the RL pipeline to ensure that greedy inference
@@ -49,7 +45,7 @@ from src.utils.visualize_patches import generate_visualization
 
 
 def greedy_infer_zoom(env, level, x, y, max_depth=10):
-    print(f"At level {level}, x {x}, y {y}")
+    #print(f"At level {level}, x {x}, y {y}")
     kept = []
     discarded = []
 
@@ -70,6 +66,7 @@ def greedy_infer_zoom(env, level, x, y, max_depth=10):
     # --------------------
     if zoom_decision == 0:
         kept.append((patch, {"level": level, "x": x, "y": y, "score": s_stop}))
+        print("Score for STOP:", s_stop)
         return kept, discarded
 
     # --------------------
@@ -104,6 +101,7 @@ def greedy_infer_zoom(env, level, x, y, max_depth=10):
     # NORMAL (non-terminal) ZOOM
     # ==================================================
     discarded.append((patch, {"level": level, "x": x, "y": y, "score": s_zoom}))
+    print("Score for ZOOM:", s_zoom)
 
     child_grids = env.wsi.get_child_grid(level, x, y)
 
@@ -167,24 +165,33 @@ def greedy_infer_wsi(
     print(f"Discarded:    {all_patches_count - len(kept_all)}")
 
     # Visualization
-    # ADDED COMMENT:
-    # Visualization overlays kept vs discarded patches to provide qualitative
-    # insight into spatial behavior of the scoring function.
-    html = generate_visualization(wsi, all_patches_count, kept_all, disc_all)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-        out_html = os.path.join(output_dir, os.path.basename(html))
-        try:
-            os.replace(html, out_html)
-            html = out_html
-        except Exception:
-            # ADDED COMMENT:
-            # Best-effort move: visualization generation should never block
-            # the inference pipeline.
-            pass
+        out_html = os.path.join(output_dir, "visualization.html")
+    else:
+        out_html = "data/visualizations/greedy/visualization.html"
+        os.makedirs(os.path.dirname(out_html), exist_ok=True)
 
-    webbrowser.open(f"file://{os.path.abspath(html)}")
-    print("Visualization opened.")
+    wsi.active_patches.clear()
+    wsi.zoomed_patches.clear()
+
+    for _patch, meta in kept_all:
+        key = (meta["level"], meta["x"], meta["y"])
+        wsi.active_patches[key] = meta
+
+    for _patch, meta in disc_all:
+        key = (meta["level"], meta["x"], meta["y"])
+        wsi.zoomed_patches[key] = meta
+
+    wsi.visualize(
+        output_html=out_html,
+        metadata={
+            "Method": "Greedy",
+            "Total patches": all_patches_count,
+            "Kept patches": len(kept_all),
+            "Discarded patches": len(disc_all),
+        },
+    )
     return kept_all, disc_all
 
 

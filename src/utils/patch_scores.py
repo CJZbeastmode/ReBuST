@@ -1,6 +1,10 @@
 from torch.nn.functional import cosine_similarity
+from .embedder import Embedder
 import numpy as np
 import cv2
+import json
+import os
+import torch
 
 
 class PatchScoreModule:
@@ -195,7 +199,7 @@ class TextAlignScore(PatchScoreModule):
             raise ValueError(f"Invalid aggregation method: {agg}")
 
         self.weight = weight
-        self.embedder = embedder  # Shared vision–language model
+        self.embedder = Embedder(img_backend="plip") if embedder is None else embedder  # Shared vision–language model
         self.k = k  # Top-k aggregation (currently implicit)
         self.agg = agg
 
@@ -542,6 +546,434 @@ class EntropyScore(PatchScoreModule):
 
 
 # ==========================================================
+# Cancer-type centroid reward
+# ==========================================================
+
+class CancerTypeCentroidScore(PatchScoreModule):
+    """
+    PLIP-text-centroid reward for cancer-type-specific patch selection.
+
+    Motivation:
+    -----------
+    Rather than aligning patches to generic pathology text, this module
+    pre-embeds all morphologically discriminative phrases for a specific
+    cancer type (loaded from data/pathology_keywords/<cancer_type>.json)
+    and averages them into a single unit-norm centroid vector.
+
+    At inference time the stop/zoom scores are the cosine similarity
+    between the patch PLIP image embedding and that centroid, scaled
+    by `weight`.  Because the centroid is computed once at construction,
+    there is no per-patch overhead beyond a single PLIP image forward pass.
+
+    Usage:
+    ------
+        scorer = CancerTypeCentroidScore(cancer_type="LUAD")
+        s_stop = scorer.compute_stop(parent_patch)
+        s_zoom = scorer.compute_zoom(child_patches=children)
+    """
+
+    KEYWORD_DIR = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "pathology_keywords")
+    )
+
+    PROMPT_TEMPLATES = [
+        "H&E histology patch showing {kw}",
+        "pathology tissue with {kw}",
+        "microscopy image of {kw}",
+    ]
+
+    def __init__(self, cancer_type: str, weight: float = 1.0, embedder=None, agg: str = "mean", **kwargs):
+        if agg not in ("mean", "max"):
+            raise ValueError(f"CancerTypeCentroidScore: invalid aggregation '{agg}', choose 'mean' or 'max'.")
+        self.cancer_type = cancer_type
+        self.weight = weight
+        self.agg = agg
+        self.embedder = Embedder(img_backend="plip") if embedder is None else embedder
+        self._centroid: torch.Tensor | None = None  # lazy-built on first use
+
+    # ------------------------------------------------------------------
+    # Centroid construction
+    # ------------------------------------------------------------------
+
+    def _build_centroid(self) -> torch.Tensor:
+        """Load keyword JSON, encode all prompts with PLIP, return mean unit vector."""
+        kw_path = os.path.join(self.KEYWORD_DIR, f"{self.cancer_type}.json")
+        if not os.path.isfile(kw_path):
+            raise FileNotFoundError(
+                f"CancerTypeCentroidScore: no keyword file for '{self.cancer_type}' at {kw_path}. "
+                f"Create data/pathology_keywords/{self.cancer_type}.json first."
+            )
+
+        with open(kw_path, "r", encoding="utf-8") as fh:
+            kw_map = json.load(fh)
+
+        all_prompts = [
+            tmpl.format(kw=kw)
+            for keywords in kw_map.values()
+            for kw in keywords
+            for tmpl in self.PROMPT_TEMPLATES
+        ]
+
+        text_inputs = self.embedder.processor(
+            text=all_prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        )
+
+        with torch.no_grad():
+            feats = self.embedder.model.get_text_features(**text_inputs)
+
+        feats = feats / (feats.norm(dim=-1, keepdim=True) + 1e-12)
+        centroid = feats.mean(dim=0)
+        centroid = centroid / (centroid.norm() + 1e-12)
+        return centroid.cpu()
+
+    def _get_centroid(self) -> torch.Tensor:
+        if self._centroid is None:
+            self._centroid = self._build_centroid()
+        return self._centroid
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _cos_sim(self, patch) -> float:
+        """Cosine similarity between a patch (or tensor) and the centroid."""
+        try:
+            emb = (
+                patch
+                if isinstance(patch, torch.Tensor)
+                else self.embedder._plip_img_emb(patch)
+            )
+            emb = emb.float()
+            emb = emb / (emb.norm() + 1e-12)
+            c = self._get_centroid().to(emb.dtype)
+            return float(cosine_similarity(emb.unsqueeze(0), c.unsqueeze(0)).item())
+        except Exception:
+            return 0.0
+
+    # ------------------------------------------------------------------
+    # PatchScoreModule interface
+    # ------------------------------------------------------------------
+
+    def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        STOP score: cosine similarity of the current patch to the cancer-type centroid.
+        """
+        if parent_patch is None:
+            return 0.0
+        return self.weight * self._cos_sim(parent_patch)
+
+    def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        ZOOM score: aggregated cosine similarity of child patches to the centroid.
+        """
+        if not child_patches:
+            return 0.0
+
+        scores = []
+        for p in child_patches:
+            try:
+                scores.append(self._cos_sim(p))
+            except Exception:
+                continue
+
+        if not scores:
+            return 0.0
+
+        agg_score = float(np.mean(scores)) if self.agg == "mean" else float(np.max(scores))
+        return self.weight * agg_score
+
+    def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        Relative centroid-alignment gain from zooming.
+        """
+        try:
+            s_stop = self.compute_stop(parent_patch=parent_patch)
+            s_zoom = self.compute_zoom(child_patches=child_patches)
+            return s_zoom - s_stop
+        except Exception:
+            return 0.0
+
+    def infer(self, s_stop, s_zoom):
+        """Zoom if the centroid alignment improves after zooming."""
+        return 1 if s_zoom > s_stop else 0
+
+
+# ==========================================================
+# Biologically motivated hard-negative pairs
+# ==========================================================
+
+#: Maps each cancer type to its known hard-negative types.
+#: These are pairs where morphological similarity is highest,
+#: making discrimination diagnostically meaningful.
+#:
+#: Used by ContrastiveTextScore when neg_cancer_types="pairs".
+#: If a cancer type has no entry here, "pairs" falls back to "all".
+CONTRASTIVE_PAIRS: dict[str, list[str]] = {
+    # Lung subtypes: adenocarcinoma vs squamous-cell (same organ, different cell type)
+    # LUAD also confused with MESO (both can show papillary/glandular patterns)
+    "LUAD": ["LUSC", "MESO"],
+    "LUSC": ["LUAD"],
+    # Colorectal: colon vs rectal (adjacent segments, nearly identical architecture)
+    "COAD": ["READ", "STAD"],
+    "READ": ["COAD", "STAD"],
+    # Upper GI: stomach vs oesophagus (gastro-oesophageal junction ambiguity)
+    "STAD": ["ESCA", "COAD"],
+    "ESCA": ["STAD"],
+    # Hepatobiliary: liver vs bile duct vs pancreas
+    # LIHC and CHOL share the hepatic microenvironment; PAAD has similar ductal glands
+    "LIHC": ["CHOL", "PAAD"],
+    "PAAD": ["CHOL", "LIHC"],
+    # Mesothelioma: pleural/peritoneal epithelioid growth confused with lung adenocarcinoma
+    "MESO": ["LUAD", "PAAD"],
+    # Biliary: cholangiocarcinoma vs hepatocellular vs pancreatic (glandular/ductal overlap)
+    "CHOL": ["LIHC", "PAAD"],
+    # Melanocytic tumours: cutaneous vs uveal melanoma (same cell lineage, different morphology)
+    "SKCM": ["UVM"],
+    "UVM":  ["SKCM"],
+    # All other types are considered mutually confusable for the purposes of "all" negatives
+    "all": ["LUAD", "LUSC", "COAD", "READ", "STAD", "ESCA", "LIHC", "PAAD", "MESO", "CHOL", "SKCM", "UVM"],
+}
+
+
+# ==========================================================
+# Contrastive cancer-type centroid reward
+# ==========================================================
+
+class ContrastiveTextScore(PatchScoreModule):
+    """
+    Contrastive PLIP-text reward: class-specific alignment minus hardest negative.
+
+    Motivation:
+    -----------
+    ``CancerTypeCentroidScore`` measures absolute alignment with a single
+    cancer type's concept centroid.  A patch depicting generic necrosis or
+    fibrosis can score high despite being diagnostically non-specific.
+
+    This module adds a hard-negative margin term::
+
+        r = cos(e_patch, c_pos) - max_j cos(e_patch, c_j)
+
+    where {c_j} are centroids for a set of confusable cancer types.  The
+    reward is positive only if the patch encodes features that are
+    *discriminative for the correct class*, not merely "pathology-like".
+
+    The hardest negatives are pre-selected by biology:
+      - LUAD ↔ LUSC  (same organ, different morphology)
+      - COAD ↔ READ  (adjacent bowel segments, nearly identical architecture)
+      - STAD ↔ ESCA  (gastro-oesophageal junction ambiguity)
+
+    neg_cancer_types accepts three forms:
+
+      "all"            Every keyword file except pos_cancer_type (default).
+      "pairs"          Look up CONTRASTIVE_PAIRS[pos_cancer_type] for the
+                       biologically motivated hard negatives; falls back to
+                       "all" when no entry exists for that cancer type.
+      list[str]        Explicit list, e.g. ["LUSC"] or ["LUSC", "COAD"].
+
+    Ablation axis (from easy to hardest):
+      easy      → neg_cancer_types=["LIHC"]          (different organ, trivially distinct)
+      hard      → neg_cancer_types=["LUSC"]           (same organ, different cell type)
+      pairs     → neg_cancer_types="pairs"            (biologically curated CONTRASTIVE_PAIRS)
+      exhaustive→ neg_cancer_types="all"              (every other keyword file)
+
+    Centroids are built once at construction via ``CancerTypeCentroidScore``
+    internals — no per-patch text encoder calls.
+
+    Usage:
+    ------
+        # Biologically curated hard negatives (recommended)
+        scorer = ContrastiveTextScore(
+            pos_cancer_type="LUAD",
+            neg_cancer_types="pairs",   # resolves to ["LUSC"]
+        )
+        # All other cancer types (default)
+        scorer = ContrastiveTextScore(
+            pos_cancer_type="LUAD",
+            neg_cancer_types="all",
+        )
+        # Explicit list
+        scorer = ContrastiveTextScore(
+            pos_cancer_type="LUAD",
+            neg_cancer_types=["LUSC", "COAD"],
+        )
+        r_stop = scorer.compute_stop(parent_patch)
+        r_zoom = scorer.compute_zoom(child_patches=children)
+    """
+
+    @staticmethod
+    def _resolve_neg_types(pos_cancer_type: str, neg_cancer_types) -> list:
+        """
+        Resolve neg_cancer_types to a concrete list of cancer-type strings.
+
+        Modes
+        -----
+        "all"   →  every keyword JSON except pos_cancer_type and 'default'.
+        "pairs" →  CONTRASTIVE_PAIRS[pos_cancer_type] if the entry exists and
+                   all listed types have keyword files; otherwise falls back
+                   to 'all' (with a warning printed to stdout).
+        list    →  used as-is (caller's responsibility for correctness).
+        """
+        kw_dir = CancerTypeCentroidScore.KEYWORD_DIR
+        # Enumerate all available cancer types once
+        available = sorted(
+            os.path.splitext(f)[0]
+            for f in os.listdir(kw_dir)
+            if f.endswith(".json")
+            and os.path.splitext(f)[0] not in (pos_cancer_type, "default")
+        )
+
+        if neg_cancer_types == "all":
+            print("[INFO] ContrastiveTextScore: using all available negative cancer types")
+            resolved = CONTRASTIVE_PAIRS.get("all", available)
+
+        elif neg_cancer_types == "pairs":
+            pairs = CONTRASTIVE_PAIRS.get(pos_cancer_type)
+            if pairs:
+                # Keep only those that actually have keyword files
+                resolved = [ct for ct in pairs if ct in available]
+                if not resolved:
+                    print(
+                        f"[WARN] ContrastiveTextScore: no valid keyword files found for "
+                        f"CONTRASTIVE_PAIRS['{pos_cancer_type}']={pairs}; "
+                        f"falling back to neg_cancer_types='all'."
+                    )
+                    resolved = CONTRASTIVE_PAIRS.get("all", available)
+                else:
+                    print(
+                        f"[INFO] ContrastiveTextScore: using curated hard negatives for "
+                        f"'{pos_cancer_type}': {resolved}"
+                    )
+            else:
+                print(
+                    f"[INFO] ContrastiveTextScore: no CONTRASTIVE_PAIRS entry for "
+                    f"'{pos_cancer_type}'; falling back to neg_cancer_types='all'."
+                )
+                resolved = CONTRASTIVE_PAIRS.get("all", available)
+
+        else:
+            resolved = list(neg_cancer_types)
+
+        if not resolved:
+            raise ValueError(
+                f"ContrastiveTextScore: no negative cancer types found "
+                f"(pos='{pos_cancer_type}', neg_cancer_types={neg_cancer_types!r})."
+            )
+        return resolved
+
+    def __init__(
+        self,
+        pos_cancer_type: str,
+        neg_cancer_types: str | list = "all",  # "all" | "pairs" | list[str]
+        weight: float = 1.0,
+        embedder=None,
+        agg: str = "mean",
+        **kwargs,
+    ):
+        if agg not in ("mean", "max"):
+            raise ValueError(f"ContrastiveTextScore: invalid agg '{agg}', choose 'mean' or 'max'.")
+
+        self.pos_cancer_type = pos_cancer_type
+        self.neg_cancer_types = self._resolve_neg_types(pos_cancer_type, neg_cancer_types)
+        self.weight = weight
+        self.agg = agg
+        # Shared embedder — all centroid scorers below reuse the same model instance
+        self.embedder = Embedder(img_backend="plip") if embedder is None else embedder
+
+        # Delegate centroid building to CancerTypeCentroidScore (lazy, cached internally)
+        self._pos_scorer = CancerTypeCentroidScore(
+            cancer_type=pos_cancer_type, weight=1.0, embedder=self.embedder
+        )
+        self._neg_scorers = [
+            CancerTypeCentroidScore(cancer_type=ct, weight=1.0, embedder=self.embedder)
+            for ct in self.neg_cancer_types
+        ]
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _contrastive_score(self, patch) -> float:
+        """
+        cos(e, c_pos) - max_j cos(e, c_neg_j)
+
+        Can be negative when the patch looks more like a negative class.
+        """
+        try:
+            emb = (
+                patch
+                if isinstance(patch, torch.Tensor)
+                else self.embedder._plip_img_emb(patch)
+            )
+            emb = emb.float()
+            emb = emb / (emb.norm() + 1e-12)
+
+            pos_c = self._pos_scorer._get_centroid().to(emb.dtype)
+            pos_sim = float(cosine_similarity(emb.unsqueeze(0), pos_c.unsqueeze(0)).item())
+
+            neg_sims = []
+            for neg_scorer in self._neg_scorers:
+                neg_c = neg_scorer._get_centroid().to(emb.dtype)
+                neg_sims.append(
+                    float(cosine_similarity(emb.unsqueeze(0), neg_c.unsqueeze(0)).item())
+                )
+
+            hardest_neg = max(neg_sims)
+            return pos_sim - hardest_neg
+        except Exception:
+            return 0.0
+
+    # ------------------------------------------------------------------
+    # PatchScoreModule interface
+    # ------------------------------------------------------------------
+
+    def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        STOP score: contrastive margin at the current patch.
+        Positive → patch is specific to pos_cancer_type.
+        Negative → patch resembles a harder negative more than the target.
+        """
+        if parent_patch is None:
+            return 0.0
+        return self.weight * self._contrastive_score(parent_patch)
+
+    def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        ZOOM score: aggregated contrastive margin over child patches.
+        """
+        if not child_patches:
+            return 0.0
+
+        scores = []
+        for p in child_patches:
+            try:
+                scores.append(self._contrastive_score(p))
+            except Exception:
+                continue
+
+        if not scores:
+            return 0.0
+
+        agg_score = float(np.mean(scores)) if self.agg == "mean" else float(np.max(scores))
+        return self.weight * agg_score
+
+    def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """Gain in contrastive discriminability from zooming."""
+        try:
+            s_stop = self.compute_stop(parent_patch=parent_patch)
+            s_zoom = self.compute_zoom(child_patches=child_patches)
+            return s_zoom - s_stop
+        except Exception:
+            return 0.0
+
+    def infer(self, s_stop, s_zoom):
+        """Zoom if discriminability improves in children."""
+        return 1 if s_zoom > s_stop else 0
+
+
+# ==========================================================
 # Registry
 # ==========================================================
 PATCH_SCORE_MODULES = {
@@ -550,4 +982,7 @@ PATCH_SCORE_MODULES = {
     "tissue_presence_score": TissuePresenceScore,
     "tissue_presence_penalty": TissuePresencePenalty,
     "entropy_score": EntropyScore,
+    "cancer_centroid_score": CancerTypeCentroidScore,
+    "contrastive_text_score": ContrastiveTextScore,
 }
+

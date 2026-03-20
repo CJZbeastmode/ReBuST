@@ -25,7 +25,7 @@ NORMAL_PROJECTS = [
     "TCGA-SKCM",
 ]
 
-RARE_PROJECTS = ["TCGA-COAD", "TCGA-READ"]
+RARE_PROJECTS = [] # TODO
 
 
 class ImageDownloader:
@@ -328,8 +328,8 @@ class ImageDownloader:
 
 if __name__ == "__main__":
     downloader = ImageDownloader(
-        target_total=5,
-        PROJECTS=RARE_PROJECTS,
+        target_total=1000,
+        PROJECTS=NORMAL_PROJECTS,
         fetched_images_output_json="tcga_cases_to_fetch.json",
     )
-    downloader.run()
+    #downloader.run()

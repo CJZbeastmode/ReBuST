@@ -16,8 +16,7 @@ import webbrowser
 
 from src.utils.wsi import WSI
 from src.utils.dynamic_patch_env import DynamicPatchEnv
-from src.training.supervised_zoom_classifier import ZoomClassifier
-from src.utils.visualize_patches import generate_visualization
+from src.training.supervised.zoom_classifier import ZoomClassifier
 
 
 # -------------------------
@@ -205,8 +204,25 @@ def greedy_infer_wsi_regressor(
     print(f"Kept / Min-level ratio:  {kept_ratio:.6f}")
     print("======================================")
 
-    out_html = generate_visualization(
-        wsi, total_min_patches, kept_all, disc_all, output_html=output_viz_path
+    # Rebuild active_patches / zoomed_patches from inference results
+    wsi.active_patches.clear()
+    wsi.zoomed_patches.clear()
+    for _patch, meta in kept_all:
+        key = (meta["level"], meta["x"], meta["y"])
+        wsi.active_patches[key] = {"score": meta.get("score", 0.0)}
+    for _patch, meta in disc_all:
+        key = (meta["level"], meta["x"], meta["y"])
+        wsi.zoomed_patches[key] = {"score": meta.get("score", 0.0)}
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_viz_path)), exist_ok=True)
+    out_html = wsi.visualize(
+        output_html=output_viz_path,
+        metadata={
+            "Method":         "Supervised Zoom Classifier",
+            "Model":          str(Path(model_path).name),
+            "Kept patches":   str(kept_count),
+            "Kept/min ratio": f"{kept_ratio:.4f}",
+        },
     )
 
     webbrowser.open(f"file://{os.path.abspath(out_html)}")
@@ -224,7 +240,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--image", type=str, default="data/to_test_image/test_img_1.svs"
     )
-    parser.add_argument("--model", type=str, default="data/models/zoom_classifier.pth")
+    parser.add_argument("--model", type=str, default="data/models/supervised/zoom_classifier.pth")
     parser.add_argument(
         "--output-viz-path",
         type=str,
