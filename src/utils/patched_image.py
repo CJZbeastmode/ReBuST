@@ -1,7 +1,9 @@
-from typing import List, Tuple, Dict, Set
-from collections import defaultdict
+"""
+Module for representing a patched image as a forest of PatchNodes.
+"""
 
-from .patch_node import PatchNode
+from typing import List, Tuple
+
 from .wsi import WSI
 import json
 import base64
@@ -26,11 +28,17 @@ class PatchedImage:
         patch_coords: List[Tuple[int, int, int]],
         zoomed_coords: List[Tuple[int, int, int]],
     ):
+        """
+        Initialize a PatchedImage.
+
+        Parameters:
+        -- wsi (WSI): WSI object with slide and level information
+        -- patch_coords (List[Tuple[int, int, int]]): List of (level x, y) tuples for kept patches
+        -- zoomed_coords (List[Tuple[int, int, int]]): List of (level, x, y) tuples for zoomed patches
+        """
         self.wsi = wsi
         self.patch_coords = patch_coords
         self.zoomed_coords = zoomed_coords
-
-
 
     # -----------------------------------------------------------
     # Visualization
@@ -38,26 +46,18 @@ class PatchedImage:
     def generate_visualization(self, output_html="./data/visualizations/temp2.html"):
         """
         Render an HTML overlay of kept/zoomed patches on the WSI thumbnail.
-        
-        Parameters
-        ----------
-        wsi : WSI
-            WSI object with slide and level information
-        all_patches_count : int
-            Total number of patches considered
-        kept : List[Tuple[patch, dict]]
-            List of (patch, metadata) tuples for patches that were kept.
-            Each metadata dict should contain: {"level": int, "x": int, "y": int}
-        zoomed : List[Tuple[patch, dict]], optional
-            List of (patch, metadata) tuples for patches that were zoomed past.
-            Each metadata dict should contain: {"level": int, "x": int, "y": int}
-        output_html : str
-            Path to save the HTML visualization file
-            
+
+        Parameters:
+        -- wsi (WSI): WSI object with slide and level information
+        -- patch_coords (List[Tuple[int, int, int]]): List of (level
+            x, y) tuples for kept patches
+        -- zoomed_coords (List[Tuple[int, int, int]]): List of (level, x, y)
+            tuples for zoomed patches
+        -- output_html (str): Path to save the HTML visualization file
+
+
         Returns
-        -------
-        str
-            Path to the saved HTML file
+        -- output_html (str): Path to the saved HTML file
         """
 
         kept = self.patch_coords
@@ -68,7 +68,7 @@ class PatchedImage:
             if info.get("frozen", False):
                 continue
             all_patches_count += sum(1 for _ in self.wsi.iterate_patches(lvl))
-        
+
         # -------------------------------------------------------------------------
         # 1. Load thumbnail at max_level (coarsest level)
         # -------------------------------------------------------------------------

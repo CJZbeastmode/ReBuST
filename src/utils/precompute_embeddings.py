@@ -1,3 +1,38 @@
+"""
+Module for precompute embeddings.
+Precompute patch-level embeddings for a list of images and store them on disk.
+
+This function iterates over images, samples patches using a user-provided
+extractor, computes embeddings, and stores results in per-image `.npz` files.
+
+Design goals:
+-------------
+- Robust to individual patch failures
+- Safe to run unattended on large WSI collections
+- Embeddings are stored on CPU as float32 for portability
+
+Args:
+    image_paths:
+        List of image paths (e.g. WSI files).
+    embedder:
+        Object exposing `img_emb(patch)` → torch.Tensor or array-like.
+    extractor_fn:
+        Callable(path, n) yielding `(patch, coord)` tuples.
+    out_dir:
+        Directory where per-image `.npz` files are written.
+    patches_per_image:
+        Number of patches to extract per image.
+    label_fn:
+        Optional callable `(path, idx, patch, coord) -> float` producing labels.
+
+Output:
+-------
+For each image `<basename>`, writes `<basename>.npz` containing:
+    - embeds:  (N, D) float32 array
+    - coords:  (N, C) float32 array
+    - labels:  (N,) float32 array (optional)
+"""
+
 import os
 import glob
 from typing import Callable, List, Tuple, Optional
@@ -16,38 +51,13 @@ def precompute_embeddings(
     label_fn: Optional[Callable] = None,
 ):
     """
-    Precompute patch-level embeddings for a list of images and store them on disk.
-
-    This function iterates over images, samples patches using a user-provided
-    extractor, computes embeddings, and stores results in per-image `.npz` files.
-
-    Design goals:
-    -------------
-    - Robust to individual patch failures
-    - Safe to run unattended on large WSI collections
-    - Embeddings are stored on CPU as float32 for portability
-
-    Args:
-        image_paths:
-            List of image paths (e.g. WSI files).
-        embedder:
-            Object exposing `img_emb(patch)` → torch.Tensor or array-like.
-        extractor_fn:
-            Callable(path, n) yielding `(patch, coord)` tuples.
-        out_dir:
-            Directory where per-image `.npz` files are written.
-        patches_per_image:
-            Number of patches to extract per image.
-        label_fn:
-            Optional callable `(path, idx, patch, coord) -> float` producing labels.
-
-    Output:
-    -------
-    For each image `<basename>`, writes `<basename>.npz` containing:
-        - embeds:  (N, D) float32 array
-        - coords:  (N, C) float32 array
-        - labels:  (N,) float32 array (optional)
+    Core pipeline:
+    - iterate over images
+    - extract patches (user-defined strategy)
+    - compute embeddings
+    - save everything per-image
     """
+
     # Ensure output directory exists (best-effort)
     try:
         os.makedirs(out_dir, exist_ok=True)
@@ -145,13 +155,14 @@ def precompute_from_wsi_folder(
     Convenience wrapper for bulk embedding precomputation from a WSI directory.
 
     This function:
-        1. Discovers WSI files in `images_dir`
-        2. Builds a WSI-based patch extractor
-        3. Delegates to `precompute_embeddings`
+    -- Discovers WSI files in `images_dir`
+    -- Builds a WSI-based patch extractor
+    -- Delegates to `precompute_embeddings`
 
     The design intentionally separates extraction logic from embedding logic,
     enabling reuse with alternative sampling strategies.
     """
+
     # --------------------------------------------------
     # Discover WSI files
     # --------------------------------------------------
@@ -165,12 +176,12 @@ def precompute_from_wsi_folder(
     except Exception:
         image_paths = []
 
+    # --------------------------------------------------
+    # Helpers
+    # --------------------------------------------------
     def extractor_fn_for_wsi(path, n):
         """
         Patch extractor for a single WSI.
-
-        Yields:
-            (patch, coord) where coord = (level, x, y)
         """
         try:
             wsi = WSI(path)
@@ -229,21 +240,31 @@ def precompute_from_wsi_folder(
     )
 
 
+# ==================================================
+# Dataset for precomputed embeddings
+# ==================================================
 class EmbeddingDataset(torch.utils.data.Dataset):
     """
     Torch Dataset for precomputed patch embeddings.
 
     Each `.npz` file contributes multiple samples. Each sample consists of:
-        - state: concatenation of (coords, embedding) or embedding alone
-        - label: optional supervision signal (defaults to 0.0)
+    - state: concatenation of (coords, embedding) or embedding alone
+    - label: optional supervision signal (defaults to 0.0)
 
     This dataset is designed for:
-        - supervised baselines
-        - offline RL
-        - probing / linear evaluation
+    - supervised baselines
+    - RL
     """
 
     def __init__(self, npz_dir: str, include_coords: bool = True):
+        """
+        Initialize the dataset by scanning the directory for `.npz` files and building an index.
+
+        Input:
+        -- npz_dir: directory containing .npz files with precomputed embeddings
+        -- include_coords: whether to include coordinates in the state representation
+        """
+
         # Discover .npz files
         try:
             files = sorted(glob.glob(os.path.join(npz_dir, "*.npz")))
@@ -259,6 +280,7 @@ class EmbeddingDataset(torch.utils.data.Dataset):
         self.index = []  # list of (file_idx, item_idx)
         self._meta = []
 
+        # Iterate over files to build index and gather metadata
         for i, fpath in enumerate(self.files):
             try:
                 with np.load(fpath, mmap_mode="r") as data:
@@ -287,6 +309,9 @@ class EmbeddingDataset(torch.utils.data.Dataset):
             self.state_dim = 0
 
     def __len__(self):
+        """
+        Total number of samples across all files.
+        """
         return len(self.index)
 
     def __getitem__(self, idx):

@@ -1,3 +1,5 @@
+"""Module for dynamic patch env."""
+
 import os
 import numpy as np
 from src.utils.patch_scores import *
@@ -31,6 +33,7 @@ class DynamicPatchEnv:
         wsi,
         patch_score="text_align_score",
         patch_score_aggregation=None,
+        image_class=None,
         patch_size=256,
         max_steps=8,
         backup_dir="data/supervised_dataset/env_backups",
@@ -55,6 +58,7 @@ class DynamicPatchEnv:
         self.patch_size = patch_size
         self.max_steps = max_steps
         self.embedder = wsi.embedder
+        self.image_class = image_class or self._resolve_image_class_from_wsi()
 
         # Pyramid bounds (coarse → fine)
         self.min_level = wsi.min_level
@@ -80,18 +84,31 @@ class DynamicPatchEnv:
             self.backup_dir = None
 
         # Patch scoring module (e.g. text-image alignment, entropy, etc.)
-        if patch_score_aggregation is None:
-            self.patch_score_module = PATCH_SCORE_MODULES.get(patch_score)(
-                embedder=self.embedder
-            )
-        else:
-            self.patch_score_module = PATCH_SCORE_MODULES.get(patch_score)(
-                embedder=self.embedder,
-                agg=patch_score_aggregation,
-            )
-        
-        #print("Sampling root patches by density...")
-        #self.root_patch_cache = self.sample_root_by_density(n_dense=4, n_mid=3, n_sparse=3)
+        score_cls = PATCH_SCORE_MODULES.get(patch_score)
+        if score_cls is None:
+            raise ValueError(f"Unknown patch_score module: {patch_score}")
+
+        score_kwargs = {"embedder": self.embedder}
+        if patch_score_aggregation is not None:
+            score_kwargs["agg"] = patch_score_aggregation
+
+        if patch_score == "cancer_centroid_score":
+            if self.image_class is None:
+                raise ValueError(
+                    "cancer_centroid_score requires image class; could not resolve class from filename."
+                )
+            score_kwargs["cancer_type"] = self.image_class
+        elif patch_score == "contrastive_text_score":
+            if self.image_class is None:
+                raise ValueError(
+                    "contrastive_text_score requires image class; could not resolve class from filename."
+                )
+            score_kwargs["pos_cancer_type"] = self.image_class
+
+        self.patch_score_module = score_cls(**score_kwargs)
+
+        # print("Sampling root patches by density...")
+        # self.root_patch_cache = self.sample_root_by_density(n_dense=4, n_mid=3, n_sparse=3)
 
         # Uncomment for debugging:
         # print(f"Initialized DynamicPatchEnv with patch score module: {patch_score}")
@@ -99,6 +116,26 @@ class DynamicPatchEnv:
     # ---------------------------------------------------------
     # Helper methods
     # ---------------------------------------------------------
+    def _resolve_image_class_from_wsi(self):
+        """
+        Resolve cancer class from slide filename.
+
+        Expected naming example:
+            TCGA-05-4390-LUAD.svs -> LUAD
+        """
+        image_path = getattr(self.wsi, "image_path", None)
+        if not image_path:
+            return None
+
+        stem = os.path.splitext(os.path.basename(image_path))[0]
+        normalized = stem.replace("_", "-")
+        tokens = [tok.upper() for tok in normalized.split("-") if tok]
+
+        for token in reversed(tokens):
+            if token.isalpha() and 3 <= len(token) <= 6 and token != "TCGA":
+                return token
+        return None
+
     def _blank_state(self):
         """
         Return a valid zero-valued state vector.
@@ -116,27 +153,27 @@ class DynamicPatchEnv:
         This encourages spatial diversity at episode initialization
         while keeping the initial observation computationally cheap.
         """
-        #if len(self.root_patch_cache) > 0:
+        # if len(self.root_patch_cache) > 0:
         #    ret_patch = self.root_patch_cache[0]
         #    self.root_patch_cache = self.root_patch_cache[1:]
         #    lvl, x, y, _ = ret_patch
         #    return lvl, x, y
-        
+
         lvl = self.max_level
         W, H = self.wsi.levels_info[lvl]["size"]
 
         x = np.random.randint(0, max(1, W - self.patch_size))
         y = np.random.randint(0, max(1, H - self.patch_size))
         return lvl, x, y
-    
+
     def sample_root_by_density(self, n_dense=4, n_mid=3, n_sparse=3):
         """
         Sample n_dense, n_mid, and n_sparse tissue patches from the root (coarsest) pyramid level based on tissue density.
-        
+
         Dense: highest tissue density (most tissue)
         Sparse: lowest tissue density (least tissue)
         Mid: middle tissue density
-        
+
         Returns:
             List of tuples: [(level, x, y, density_type)]
         """
@@ -166,32 +203,32 @@ class DynamicPatchEnv:
         dense = density_patches[:n_dense]
         sparse = density_patches[-n_sparse:] if n_sparse > 0 else []
         mid_start = max(n_dense, (len(density_patches) - n_mid) // 2)
-        mid = density_patches[mid_start:mid_start + n_mid] if n_mid > 0 else []
+        mid = density_patches[mid_start : mid_start + n_mid] if n_mid > 0 else []
 
         # Annotate density type
-        dense = [(lvl, x, y, 'dense') for (lvl, x, y, _) in dense]
-        mid = [(lvl, x, y, 'mid') for (lvl, x, y, _) in mid]
-        sparse = [(lvl, x, y, 'sparse') for (lvl, x, y, _) in sparse]
+        dense = [(lvl, x, y, "dense") for (lvl, x, y, _) in dense]
+        mid = [(lvl, x, y, "mid") for (lvl, x, y, _) in mid]
+        sparse = [(lvl, x, y, "sparse") for (lvl, x, y, _) in sparse]
 
         return dense + mid + sparse
 
     def calculate_tissue_density(self, patch):
         """
         Calculate the tissue density of a given patch. This function counts the number of non-background pixels
-        in the patch to estimate tissue density. 
+        in the patch to estimate tissue density.
         Returns a value between 0 (no tissue) and 1 (completely full of tissue).
         """
         # Convert patch to a binary mask (tissue vs. background)
         # Assuming a method `is_tissue_pixel` to check if a pixel is part of tissue
         tissue_pixels = sum(1 for pixel in patch if self.is_tissue_pixel(pixel))
         total_pixels = len(patch)
-        
+
         # Return density as the proportion of tissue pixels
         return tissue_pixels / total_pixels if total_pixels > 0 else 0
 
     def is_tissue_pixel(self, pixel):
         """
-        Check if a pixel is considered as tissue (non-background). 
+        Check if a pixel is considered as tissue (non-background).
         This is just a placeholder, you might use a thresholding or color-based method.
         """
         # For now, assuming a simplistic threshold on the pixel value
@@ -290,7 +327,10 @@ class DynamicPatchEnv:
             # terminal: cannot zoom further
             try:
                 parent_patch = self.wsi.get_patch(parent_level, parent_x, parent_y)
-                r_stop = self.patch_score_module.compute_stop(parent_patch=parent_patch)
+                r_stop = self.patch_score_module.compute_stop(
+                    parent_patch=parent_patch,
+                    image_class=self.image_class,
+                )
             except Exception:
                 return False, 0.0
 
@@ -319,16 +359,25 @@ class DynamicPatchEnv:
                 child_coords.append((child_x, child_y))
 
         if len(child_patches) == 0:
-            r_stop = self.patch_score_module.compute_stop(parent_patch=parent_patch)
+            r_stop = self.patch_score_module.compute_stop(
+                parent_patch=parent_patch,
+                image_class=self.image_class,
+            )
             r_zoom = self.patch_score_module.compute_zoom(
                 parent_patch=parent_patch,
                 child_patches=[],
+                image_class=self.image_class,
             )
             return True, [r_stop, r_zoom]
 
-        r_stop = self.patch_score_module.compute_stop(parent_patch=parent_patch)
+        r_stop = self.patch_score_module.compute_stop(
+            parent_patch=parent_patch,
+            image_class=self.image_class,
+        )
         r_zoom = self.patch_score_module.compute_zoom(
-            parent_patch=parent_patch, child_patches=child_patches
+            parent_patch=parent_patch,
+            child_patches=child_patches,
+            image_class=self.image_class,
         )
 
         return True, [r_stop, r_zoom]
@@ -414,7 +463,6 @@ class DynamicPatchEnv:
             print(f"[ENV STEP WARNING #{self.env_error_count}] {e}")
             return self._blank_state(), -1.0, True, {"type": "env_failure"}
 
-
     def _step_impl(self, action):
         """
         Internal step logic implementing STOP vs ZOOM transitions.
@@ -434,9 +482,7 @@ class DynamicPatchEnv:
         # 1. Get parent patch (current state)
         # ---------------------------------------------------------
         try:
-            parent_patch = self.wsi.get_patch(
-                self.curr_level, self.curr_x, self.curr_y
-            )
+            parent_patch = self.wsi.get_patch(self.curr_level, self.curr_x, self.curr_y)
         except Exception:
             # unrecoverable → terminate episode
             return self._blank_state(), -1.0, True, {"invalid": True}
@@ -446,7 +492,10 @@ class DynamicPatchEnv:
         # ---------------------------------------------------------
         try:
             s_stop = float(
-                self.patch_score_module.compute_stop(parent_patch=parent_patch)
+                self.patch_score_module.compute_stop(
+                    parent_patch=parent_patch,
+                    image_class=self.image_class,
+                )
             )
         except Exception:
             s_stop = 0.0
@@ -483,6 +532,7 @@ class DynamicPatchEnv:
                         self.patch_score_module.compute_zoom(
                             parent_patch=parent_patch,
                             child_patches=child_patches,
+                            image_class=self.image_class,
                         )
                     )
                 except Exception:
@@ -513,10 +563,15 @@ class DynamicPatchEnv:
                 # Select next child deterministically
                 # (minimizes transition noise)
                 # -----------------------------------------
-                idx = np.argmax([
-                    self.patch_score_module.compute_stop(parent_patch=p)
-                    for p in child_patches
-                ])
+                idx = np.argmax(
+                    [
+                        self.patch_score_module.compute_stop(
+                            parent_patch=p,
+                            image_class=self.image_class,
+                        )
+                        for p in child_patches
+                    ]
+                )
 
                 self.curr_level -= 1
                 self.curr_x, self.curr_y = child_coords[idx]
@@ -540,20 +595,24 @@ class DynamicPatchEnv:
         try:
             s_diff = float(
                 self.patch_score_module.compute_diff(
-                    s_stop=s_stop, s_zoom=s_zoom
+                    s_stop=s_stop,
+                    s_zoom=s_zoom,
+                    image_class=self.image_class,
                 )
             )
         except Exception:
             s_diff = None
 
-        info.update({
-            "action": action_name,
-            "s_stop": s_stop,
-            "s_zoom": s_zoom,
-            "s_diff": s_diff,
-            "level": self.curr_level,
-            "zoom_count": self.zoom_count,
-        })
+        info.update(
+            {
+                "action": action_name,
+                "s_stop": s_stop,
+                "s_zoom": s_zoom,
+                "s_diff": s_diff,
+                "level": self.curr_level,
+                "zoom_count": self.zoom_count,
+            }
+        )
 
         # ---------------------------------------------------------
         # 6. Final reward normalization (optional but consistent)
@@ -561,4 +620,3 @@ class DynamicPatchEnv:
         reward = float(np.clip(reward, -1.0, 1.0))
 
         return next_state, reward, done, info
-

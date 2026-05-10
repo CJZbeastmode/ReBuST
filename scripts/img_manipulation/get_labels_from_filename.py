@@ -1,3 +1,5 @@
+"""Module for get labels from filename."""
+
 import os
 import json
 

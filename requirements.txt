@@ -9,3 +9,5 @@ scikit-image
 openslide-python
 tqdm
 requests
+scikit-learn
+scipy

@@ -1,3 +1,5 @@
+"""Module for zoom classifier."""
+
 # Ensure repo root is on sys.path so `src` package imports work when running
 # this script directly (python src/training/zoom_classifier.py)
 import sys

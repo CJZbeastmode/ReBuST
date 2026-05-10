@@ -60,6 +60,7 @@ except ImportError as exc:  # pragma: no cover
 # Dataset
 # ============================================================
 
+
 class PreextractedWSIDataset(Dataset):
     """Loads pre-extracted ``.pt`` embedding files on demand."""
 
@@ -108,6 +109,7 @@ def _collate_single(batch):
 # Training / evaluation helpers
 # ============================================================
 
+
 def _train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -119,7 +121,7 @@ def _train_one_epoch(
     total_loss = 0.0
     for batch in loader:
         item = batch[0]
-        X = item["embeddings"].to(device)          # [N, 512]
+        X = item["embeddings"].to(device)  # [N, 512]
         y = torch.tensor([item["label"]], device=device)
 
         optimizer.zero_grad()
@@ -182,6 +184,7 @@ def _evaluate(
 # K-fold benchmark (public API)
 # ============================================================
 
+
 def run_kfold_benchmark(
     embeddings_dir: str,
     labels_json: str,
@@ -229,9 +232,9 @@ def run_kfold_benchmark(
         raw_labels = json.load(f)
 
     available = [
-        cid for cid in raw_labels
-        if raw_labels[cid]
-        and os.path.exists(os.path.join(embeddings_dir, f"{cid}.pt"))
+        cid
+        for cid in raw_labels
+        if raw_labels[cid] and os.path.exists(os.path.join(embeddings_dir, f"{cid}.pt"))
     ]
 
     if not available:
@@ -244,10 +247,7 @@ def run_kfold_benchmark(
     proj2int = {p: i for i, p in enumerate(projects)}
     num_classes = len(projects)
 
-    items = [
-        {"case_id": c, "label": proj2int[raw_labels[c]]}
-        for c in available
-    ]
+    items = [{"case_id": c, "label": proj2int[raw_labels[c]]} for c in available]
 
     print(
         f"[BENCHMARK] dir={embeddings_dir}  cases={len(items)}  "
@@ -390,23 +390,27 @@ if __name__ == "__main__":
         description="Stratified K-fold MIL benchmark on pre-extracted embeddings"
     )
     p.add_argument(
-        "--embeddings-dir", required=True,
+        "--embeddings-dir",
+        required=True,
         help="Directory with {case_id}.pt embedding files",
     )
     p.add_argument(
-        "--labels-json", default="data/labels_main.json",
+        "--labels-json",
+        default="data/labels_main.json",
         help="JSON mapping case_id → project label",
     )
     p.add_argument("--k", type=int, default=5, help="Number of CV folds (default 5)")
     p.add_argument("--epochs", type=int, default=20, help="Training epochs per fold")
     p.add_argument("--lr", type=float, default=1e-4, help="Adam learning rate")
     p.add_argument(
-        "--device", default="cpu",
+        "--device",
+        default="cpu",
         help='Torch device ("cpu", "cuda", "mps")',
     )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
-        "--out-json", default=None,
+        "--out-json",
+        default=None,
         help="Path to save full results as JSON",
     )
     args = p.parse_args()

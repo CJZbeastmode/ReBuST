@@ -76,8 +76,10 @@ _CSV_FIELDS = [
 # Helpers
 # ============================================================
 
+
 class _Namespace:
     """Minimal attribute bag used when calling extract_main programmatically."""
+
     pass
 
 
@@ -142,6 +144,7 @@ def _print_table(results: Dict[str, Dict]) -> None:
 # Main orchestrator
 # ============================================================
 
+
 def run_benchmark(args) -> None:
     methods: List[str] = args.methods
 
@@ -163,20 +166,14 @@ def run_benchmark(args) -> None:
         for method in methods:
             # Validate that required model paths are present
             if method in _A2C_METHODS and not args.a2c_model:
-                print(
-                    f"  [SKIP EXTRACT] {method}: --a2c-model not provided"
-                )
+                print(f"  [SKIP EXTRACT] {method}: --a2c-model not provided")
                 continue
             if method in _SUP_METHODS and not args.supervised_model:
-                print(
-                    f"  [SKIP EXTRACT] {method}: --supervised-model not provided"
-                )
+                print(f"  [SKIP EXTRACT] {method}: --supervised-model not provided")
                 continue
 
             model_path = (
-                args.supervised_model
-                if method in _SUP_METHODS
-                else args.a2c_model
+                args.supervised_model if method in _SUP_METHODS else args.a2c_model
             )
             emb_out_dir = os.path.join("data", "extracted_embeddings", method)
 
@@ -197,6 +194,7 @@ def run_benchmark(args) -> None:
                 _extract_main(ea)
             except Exception as exc:
                 import traceback
+
                 print(f"  [EXTRACT FAIL] {method}: {exc}")
                 traceback.print_exc()
     else:
@@ -216,10 +214,7 @@ def run_benchmark(args) -> None:
         if not os.path.isdir(emb_dir) or not any(
             fname.endswith(".pt") for fname in os.listdir(emb_dir)
         ):
-            print(
-                f"\n  [SKIP BENCHMARK] {method}: "
-                f"no .pt files in {emb_dir}"
-            )
+            print(f"\n  [SKIP BENCHMARK] {method}: " f"no .pt files in {emb_dir}")
             continue
 
         print(f"\n  ── Benchmarking method={method}  dir={emb_dir}")
@@ -237,6 +232,7 @@ def run_benchmark(args) -> None:
             results_all[method] = result
         except Exception as exc:
             import traceback
+
             print(f"  [BENCHMARK FAIL] {method}: {exc}")
             traceback.print_exc()
 
@@ -252,10 +248,7 @@ def run_benchmark(args) -> None:
         writer = csv.DictWriter(fh, fieldnames=_CSV_FIELDS)
         writer.writeheader()
         for method, res in results_all.items():
-            row = {
-                field: res.get(field, "")
-                for field in _CSV_FIELDS
-            }
+            row = {field: res.get(field, "") for field in _CSV_FIELDS}
             row["method"] = method
             writer.writerow(row)
     print(f"\n[RESULTS] CSV    → {out_csv}")
@@ -283,7 +276,10 @@ if __name__ == "__main__":
 
     # --- Method selection ---
     p.add_argument(
-        "--methods", nargs="+", default=ALL_METHODS, choices=ALL_METHODS,
+        "--methods",
+        nargs="+",
+        default=ALL_METHODS,
+        choices=ALL_METHODS,
         help="Methods to benchmark (default: all)",
     )
 
@@ -293,21 +289,27 @@ if __name__ == "__main__":
 
     # --- Model checkpoints ---
     p.add_argument(
-        "--a2c-model", default=None,
+        "--a2c-model",
+        default=None,
         help="A2C checkpoint path (required for 'a2c' and 'humbe_a2c')",
     )
     p.add_argument(
-        "--supervised-model", default=None,
+        "--supervised-model",
+        default=None,
         help="Score-regressor checkpoint path (required for 'supervised')",
     )
 
     # --- Selection hyper-parameters ---
     p.add_argument(
-        "--budget", type=float, default=0.8,
+        "--budget",
+        type=float,
+        default=0.8,
         help="HUMBE budget ratio",
     )
     p.add_argument(
-        "--max-depth", type=int, default=6,
+        "--max-depth",
+        type=int,
+        default=6,
         help="Maximum zoom depth for greedy / a2c",
     )
 
@@ -316,22 +318,26 @@ if __name__ == "__main__":
     p.add_argument("--epochs", type=int, default=20, help="Training epochs per fold")
     p.add_argument("--lr", type=float, default=1e-4, help="Adam learning rate")
     p.add_argument(
-        "--device", default="cpu",
+        "--device",
+        default="cpu",
         help='Torch device ("cpu", "cuda", "mps")',
     )
     p.add_argument("--seed", type=int, default=42)
 
     # --- Run control ---
     p.add_argument(
-        "--skip-extraction", action="store_true",
+        "--skip-extraction",
+        action="store_true",
         help="Skip embedding extraction; use .pt files already on disk",
     )
     p.add_argument(
-        "--force-extract", action="store_true",
+        "--force-extract",
+        action="store_true",
         help="Re-extract embeddings even if .pt files already exist",
     )
     p.add_argument(
-        "--out-csv", default="data/benchmark/results.csv",
+        "--out-csv",
+        default="data/benchmark/results.csv",
         help="Path for the output CSV",
     )
 

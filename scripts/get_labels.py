@@ -1,3 +1,5 @@
+"""Module for get labels."""
+
 import os
 import json
 from typing import Dict, Optional

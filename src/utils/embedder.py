@@ -1,3 +1,5 @@
+"""Module for embedder."""
+
 import numpy as np
 import os
 import torch
@@ -41,7 +43,11 @@ class Embedder:
     """
 
     def __init__(
-        self, img_backend="plip", keyword_path=DEFAULT_KEYWORD_PATH, device=None
+        self,
+        img_backend="plip",
+        keyword_path=DEFAULT_KEYWORD_PATH,
+        device=None,
+        model_path: str | None = None,
     ):
         """
         Initialize the embedding backend and auxiliary resources.
@@ -76,11 +82,11 @@ class Embedder:
             if img_backend.lower() == "conch":
                 hf_token = os.environ.get("HF_AUTH_TOKEN")
                 if not hf_token:
-                    raise RuntimeError("HF_AUTH_TOKEN not set in environment. Please set it in your .env.secret file.")
+                    raise RuntimeError(
+                        "HF_AUTH_TOKEN not set in environment. Please set it in your .env.secret file."
+                    )
                 self.model, self.processor = create_model_from_pretrained(
-                    "conch_ViT-B-16",
-                    "hf_hub:MahmoodLab/conch",
-                    hf_auth_token=hf_token
+                    "conch_ViT-B-16", "hf_hub:MahmoodLab/conch", hf_auth_token=hf_token
                 )
             elif img_backend.lower() == "plip":
                 self.model = CLIPModel.from_pretrained("vinid/plip")
@@ -91,6 +97,23 @@ class Embedder:
             raise RuntimeError(
                 f"Failed to initialize image backend '{img_backend}': {e}"
             )
+
+        # --------------------------------------------------
+        # Optional fine-tuned checkpoint load
+        # --------------------------------------------------
+        if model_path:
+            try:
+                payload = torch.load(model_path, map_location=self.device)
+                state_dict = payload.get("model_state_dict", payload)
+                missing, unexpected = self.model.load_state_dict(
+                    state_dict, strict=False
+                )
+                if missing or unexpected:
+                    print(
+                        f"[Embedder] checkpoint loaded with missing={len(missing)} unexpected={len(unexpected)}"
+                    )
+            except Exception as exc:
+                raise RuntimeError(f"Failed to load embedder checkpoint: {exc}")
 
         # --------------------------------------------------
         # Keyword loading (non-fatal)

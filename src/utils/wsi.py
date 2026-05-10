@@ -1,3 +1,92 @@
+"""
+WSI — Hierarchical Whole Slide Image Interface
+
+Overview
+--------
+This module provides a hierarchical abstraction over Whole Slide Images (WSIs),
+supporting multi-resolution patch extraction, dynamic refinement (zooming), and
+per-patch state tracking.
+
+The class is designed to serve as the central state container for algorithms such
+as HUMBE (budgeted refinement) and reinforcement learning approaches (e.g. A2C),
+where patches are progressively selected and refined across pyramid levels.
+
+Core Concepts
+-------------
+1. Pyramid Representation
+   The WSI is represented as a multi-resolution pyramid consisting of:
+   - Native OpenSlide levels (original image resolutions)
+   - Synthetic levels (downsampled extensions for coarse-to-fine search)
+
+2. Patch-Based Abstraction
+   Each level is partitioned into fixed-size patches (patch_size × patch_size).
+   Patches are addressed via coordinates:
+       (level, x, y)
+
+3. Active vs Zoomed Patches
+   The hierarchy is represented implicitly using two dictionaries:
+   - active_patches:
+       Current leaf nodes (visible patches used by downstream algorithms)
+   - zoomed_patches:
+       Internal nodes that have been expanded into children
+
+   This forms a tree structure without explicit pointers.
+
+4. Multistage vs Single-Stage Mode
+   - multistage=False (default):
+       All patches are always eligible for zooming
+   - multistage=True:
+       Zoom eligibility is controlled via per-patch metadata ("zoomable"),
+       allowing external algorithms (e.g. HUMBE) to enforce budgets
+
+5. Embeddings
+   The class integrates an embedding backend (e.g. PLIP or CONCH) for extracting
+   feature vectors from patches.
+
+Key Responsibilities
+--------------------
+- Load and manage WSI pyramid levels
+- Generate synthetic coarse levels for hierarchical search
+- Extract image patches robustly (native + synthetic)
+- Maintain dynamic patch hierarchy (zooming operations)
+- Provide utilities for iteration and metadata management
+- Interface with embedding models
+
+Typical Workflow
+----------------
+    wsi = WSI("slide.svs", multistage=True)
+
+    # Initial state: flat grid at coarsest level
+    patches = wsi.get_active_patches()
+
+    # Refine a patch
+    children = wsi.zoom_patch(level, x, y)
+
+    # Attach metadata (e.g. scores)
+    wsi.set_patch_metadata(level, x, y, {"score": 0.85})
+
+    # Iterate over patches
+    for x, y in wsi.iterate_patches(level):
+        ...
+
+    # Extract embeddings
+    emb = wsi.get_emb(image_patch)
+
+Design Notes
+------------
+- The hierarchy is implemented in hashmaps, enabling fast lookup and mutation.
+- Synthetic levels ensure consistent scaling even when native levels are sparse.
+- Frozen levels prevent processing of extremely large resolutions.
+- Patch metadata is extensible and can store arbitrary algorithm-specific data.
+
+Dependencies
+------------
+- OpenSlide (WSI reading)
+- PIL (image processing)
+- torch (embedding backend)
+- Custom Embedder (PLIP / CONCH support)
+"""
+
 import os
 import json
 import base64
@@ -7,8 +96,12 @@ from PIL import Image
 import torch
 import math
 from typing import Iterator
-
 from .embedder import Embedder
+
+
+# =====================================================================
+# WSI Class
+# =====================================================================
 
 
 class WSI:
@@ -25,31 +118,26 @@ class WSI:
         multistage: bool = False,
     ):
         """
-        Load the WSI, initialize PLIP, generate synthetic pyramid levels.
+        Initializer for hierarchical WSI processing.
 
-        At init, all patches start at ``max_level`` (coarsest), identical to
-        the original WSI behavior.  Per-patch levels are tracked via the
-        ``active_patches`` hashmap; individual patches can be zoomed to finer
-        levels independently after construction.
+        Parameters:
+            image_path (str): Path to the WSI file.
+            patch_size (int): Size of square patches (default: 256).
+            target_min_side (int): Minimum side length for synthetic levels (default: 512).
+            synthetic_scale (float): Downsampling factor for synthetic levels (default: 0.5).
+            max_level_side (int): Max side length for native levels before freezing (default: 40000).
+            embedder (Embedder): Optional pre-initialized Embedder instance.
+            img_embedding_backend (str): "plip" or "conch" for embedding backend (default: "plip").
+            min_level (int | None): Optional user-specified minimum level floor.
+            multistage (bool): If True, zoom eligibility is controlled via metadata.
 
-        Parameters
-        ----------
-        min_level : int | None
-            Floor on how far any patch may be zoomed.  ``None`` (default) uses
-            the finest non-frozen native level (typically level 0 / 1).  Pass
-            a positive integer (e.g. ``2``) to prevent A2C / HUMBE from ever
-            descending past that level.
-        multistage : bool
-            When ``True`` (multistage / HUMBE-B mode), newly initialised patches
-            have ``zoomable=False`` by default — the budget enforcer decides which
-            patches are eligible for refinement.
-            When ``False`` (default, single-stage A2C / greedy mode), patches are
-            initialised with ``zoomable=True`` so any patch may be zoomed freely.
+        Key invariant:
+            At initialization, ALL patches exist only at the coarsest level (max_level).
+            Refinement (zooming) is applied dynamically afterwards.
         """
 
-        # OpenSlide — fail fast on unsupported / corrupt files.
+        self.image_path = image_path
         self.slide = openslide.OpenSlide(image_path)
-
         self.patch_size = patch_size
         self.target_min_side = target_min_side
         self.synthetic_scale = synthetic_scale
@@ -75,11 +163,11 @@ class WSI:
                 embedder = Embedder(img_backend="conch", device=device)
             else:
                 embedder = Embedder()
+
         # Keep the Embedder instance for encoding convenience
         self.embedder = embedder
         self.model = embedder.model
         self.processor = embedder.processor
-
         self.device = device
 
         # Build native levels
@@ -87,7 +175,7 @@ class WSI:
 
         # Set min_level to the finest non-frozen native level.
         # Level 0 (native full-res) is typically frozen (too large to tile), so
-        # min_level ends up as 1 (or wherever the first accessible level is).
+        # min_level ends up as 1.
         # This prevents A2C from zooming into frozen levels that can't be read.
         self.min_level = min(
             lvl
@@ -105,36 +193,43 @@ class WSI:
                 print(f"[WSI] min_level set to {clamped} (user override)")
             self.min_level = clamped
 
-        # ------------------------------------------------------------------
-        # Per-patch level tracking
-        # ------------------------------------------------------------------
-        # Key  : (level, x, y) — absolute patch coordinates at its current level.
-        # Value: free-form metadata dict (score, provenance, …) — empty by default.
+        # Key: (level, x, y) — absolute patch coordinates at its current level.
+        # Value: metadata dict
         self.active_patches: dict[tuple[int, int, int], dict] = {}
 
         # Interior nodes that were expanded (replaced by children).
         # Stored as a dict so we can attach metadata (e.g. zoomable=True).
-        # Kept separately so the visualiser can render zoomed-past regions.
         self.zoomed_patches: dict[tuple[int, int, int], dict] = {}
 
         # Default: flat grid of all patches at max_level — same as original WSI.
         self._init_root_patches()
 
     # =====================================================================
-    # Build native levels (unchanged from original)
+    # Helpers
     # =====================================================================
     def _build_native_levels(self):
-        """Add all native OpenSlide levels to levels_info."""
-        self.min_level = 0  # will be updated
+        """
+        Populate levels_info with all OpenSlide levels.
 
+        Each level stores:
+        - original size
+        - padded size
+        - downsample factor
+        - frozen flag
+        """
+        self.min_level = 0
+
+        # Iterate over native OpenSlide levels
         for lvl in range(self.slide.level_count):
             w, h = self.slide.level_dimensions[lvl]
 
             frozen = max(w, h) > self.max_level_side
 
+            # Track the finest non-frozen level as min_level
             if not frozen and lvl < getattr(self, "min_level", lvl):
                 self.min_level = lvl
 
+            # Calculate padded size
             pw = int(math.ceil(w / float(self.patch_size)) * self.patch_size)
             ph = int(math.ceil(h / float(self.patch_size)) * self.patch_size)
 
@@ -147,13 +242,14 @@ class WSI:
                 "frozen": frozen,
             }
 
-    # =====================================================================
-    # Generate synthetic coarse levels
-    # =====================================================================
     def _generate_synthetic_levels(self):
         """
-        Create downsampled synthetic levels beyond the coarsest native level.
-        Uses consistent 0.5 scale factor for synthetic levels.
+        Generate additional coarse levels.
+        Mechanism: downsampling the coarsest native level
+
+        Motivation:
+        - Enables true coarse-to-fine search
+        - Avoids starting from overly detailed views
         """
 
         # Find the coarsest native level
@@ -172,11 +268,11 @@ class WSI:
         scale = self.synthetic_scale
         current_level = max_native_idx + 1
 
+        # Iterate until the synthetic level becomes too small to yield meaningful features
         while True:
             new_w, new_h = int(w * scale), int(h * scale)
 
-            # Stop generating synthetic levels once resolution becomes
-            # too small to yield meaningful patch-level features.
+            # Quit if the new level is too small to be useful
             if min(new_w, new_h) < self.target_min_side:
                 break
 
@@ -186,6 +282,7 @@ class WSI:
             # Pad synthetic image so its dimensions are multiples of patch_size
             pw = int(math.ceil(new_w / float(self.patch_size)) * self.patch_size)
             ph = int(math.ceil(new_h / float(self.patch_size)) * self.patch_size)
+            # Only pad if necessary
             if (pw, ph) != (new_w, new_h):
                 canvas = Image.new("RGB", (pw, ph), (255, 255, 255))
                 canvas.paste(synth, (0, 0))
@@ -200,6 +297,7 @@ class WSI:
                 "frozen": False,
             }
 
+            # Next level is downsampled from the current synthetic level
             base_img = synth
             w, h = new_w, new_h
             current_level += 1
@@ -207,25 +305,27 @@ class WSI:
         self.max_level = max(self.levels_info.keys())
 
     # =====================================================================
-    # Patch extraction
+    # Getters
     # =====================================================================
     def get_patch(self, lvl_id, x, y):
         """
         Extract patch from either real level or synthetic level.
         Raises exception if patch cannot be read (corrupted file).
+
         Output: img (PIL Image)
         """
+
         x = int(x)
         y = int(y)
-
         entry = self.levels_info[lvl_id]
 
+        # Quit early if level is frozen
         if entry.get("frozen", False):
             raise RuntimeError(
                 f"Level {lvl_id} is frozen (size {entry['size']} exceeds limit)"
             )
 
-        # use padded size for tiling / bounds when available
+        # use padded size for tiling when available
         if "padded_size" in entry:
             w, h = entry["padded_size"]
         else:
@@ -242,7 +342,7 @@ class WSI:
                 img = self.slide.read_region(
                     (lx, ly), native_idx, (self.patch_size, self.patch_size)
                 ).convert("RGB")
-                # Ensure patch is exactly patch_size x patch_size; pad with white if smaller
+                # Ensure patch is exactly patch_size x patch_size
                 if img.size != (self.patch_size, self.patch_size):
                     canvas = Image.new(
                         "RGB", (self.patch_size, self.patch_size), (255, 255, 255)
@@ -250,10 +350,8 @@ class WSI:
                     canvas.paste(img, (0, 0))
                     img = canvas
                 return img
+
             except Exception as e:
-                # ADDED COMMENT:
-                # OpenSlide/OpenJPEG failures are surfaced explicitly
-                # so callers (e.g. RL env) can catch and skip safely.
                 raise RuntimeError(
                     f"Failed to read patch at level {lvl_id}, pos ({x},{y}): {e}"
                 )
@@ -263,13 +361,11 @@ class WSI:
             img = self.synthetic_images[lvl_id]
 
             # Clamp start coordinates to padded image so cropping is safe.
-            # This ensures patches that lie beyond original content are pure white.
             padded_w, padded_h = entry.get("padded_size") or entry["size"]
             max_x = max(0, padded_w - self.patch_size)
             max_y = max(0, padded_h - self.patch_size)
             x = max(0, min(x, max_x))
             y = max(0, min(y, max_y))
-
             x2 = x + self.patch_size
             y2 = y + self.patch_size
 
@@ -286,16 +382,10 @@ class WSI:
         else:
             raise ValueError(f"Unknown level type: {entry['type']}")
 
-    # =====================================================================
-    # Dynamic scale between levels
-    # =====================================================================
     def get_scale(self, parent_level):
         """
-        Compute scale factor from parent level to child (next finer) level.
-        Scale = child_width / parent_width
-
-        For native levels, this can be 2, 4, or other values.
-        For synthetic levels, this is typically 2.
+        Compute scale factor between parent and child level.
+        scale = child_width / parent_width
         """
         child_level = parent_level - 1
         if child_level < 0:
@@ -310,8 +400,9 @@ class WSI:
         """
         Compute the number of child patches that fit in one parent patch.
 
-        If scale = 2, we get 2x2 = 4 children.
-        If scale = 4, we get 4x4 = 16 children.
+        Example:
+        - If scale = 2, we get 2x2 = 4 children.
+        - If scale = 4, we get 4x4 = 16 children.
 
         Returns (num_children_per_side, total_children)
         """
@@ -327,26 +418,16 @@ class WSI:
 
     def get_child_grid(self, parent_level, parent_x=None, parent_y=None):
         """
-        Return child-patch coordinates relative to a parent patch.
+        Compute child patch coordinates.
 
-        Calling modes
-        -------------
-        ``get_child_grid(parent_level)``
-            Legacy / offset mode — returns ``List[(dx, dy)]``, the relative
-            offsets (in child-level pixels) for each child of any parent patch
-            at ``parent_level``.  Used by single-stage inference helpers that
-            only need the structural grid without a specific parent location.
+        Two modes:
+        - offset mode → returns relative offsets
+        - absolute mode → returns actual coordinates of children
 
-        ``get_child_grid(parent_level, parent_x, parent_y)``
-            Absolute mode — returns ``List[List[(nx, ny)]]``, one inner list
-            per child, each containing the absolute child-level coordinate of
-            that child.  Used by multistage / WSI_B-style callers.
-
-        Returns
-        -------
-        List[(dx, dy)]  when parent_x/parent_y are None
-        List[List[(nx, ny)]]  otherwise
+        Returns:
+        - List of grids, where each grid is a list of (child_x, child_y) tuples.
         """
+
         scale = self.get_scale(parent_level)
         if scale is None:
             return []
@@ -356,7 +437,7 @@ class WSI:
         if child_level < 0:
             return []
 
-        # --- offset-only mode (legacy) ---
+        # --- offset mode ---
         if parent_x is None or parent_y is None:
             offsets = []
             for row in range(num_per_side):
@@ -379,21 +460,22 @@ class WSI:
 
         return child_grids
 
-    # =====================================================================
-    # Get embedding
-    # =====================================================================
     def get_emb(self, img):
-        """Get PLIP image embedding."""
-        # Delegate to the central Embedder implementation which handles
-        # PIL/numpy/torch inputs, blank-patch checks, normalization and caching.
+        """
+        Get PLIP image embedding.
+
+        Input: PIL Image
+        Output: torch.Tensor of shape (embed_dim,)
+        """
         return self.embedder.img_emb(img)
 
     # =========================================================================
-    # Patch iterator
+    # Iterator
     # =========================================================================
-
     def iterate_patches(self, lvl_id) -> Iterator[tuple[int, int]]:
-        """Yield every (x, y) patch coordinate for the given pyramid level."""
+        """
+        Iterate over all patch coordinates at a given level.
+        """
         entry = self.levels_info[lvl_id]
         if entry.get("frozen", False):
             return
@@ -403,22 +485,12 @@ class WSI:
                 yield x, y
 
     # =========================================================================
-    # Per-patch level tracking
+    # Tracking
     # =========================================================================
-
     def _init_root_patches(self):
         """
-        Populate active_patches with all patches at max_level.
-
-        Replicates the original WSI flat-grid behaviour: every patch starts at
-        the coarsest level.
-
-        * ``multistage=False`` — ``zoomable`` is
-          never stored; every patch is unconditionally zoomable.  Use
-          ``is_zoomable()`` to query.
-        * ``multistage=True`` — ``zoomable=False`` stored
-          so the budget enforcer is the sole authority on which patches may be
-          zoomed.
+        Initialize flat grid at coarsest level.
+        All patches start as active; zooming operations will move them to zoomed.
         """
         self.active_patches.clear()
         self.zoomed_patches.clear()
@@ -429,38 +501,29 @@ class WSI:
             for x, y in self.iterate_patches(self.max_level):
                 self.active_patches[(self.max_level, x, y)] = {}
 
-    def zoom_patch(
-        self, lvl: int, x: int, y: int
-    ) -> list[tuple[int, int, int]]:
+    def zoom_patch(self, lvl: int, x: int, y: int) -> list[tuple[int, int, int]]:
         """
         Replace the active patch at (lvl, x, y) with its children.
 
         The parent is removed from active_patches and recorded in
         zoomed_patches.  All children are inserted into active_patches
-        with default metadata (inheriting the multistage zoomable default).
+        with default metadata.
 
-        Parameters
-        ----------
-        lvl, x, y : int
-            Coordinates of the patch to zoom.
+        Parameters:
+        -- lvl, x, y (int): Coordinates of the patch to zoom.
 
         Returns
-        -------
-        list of (child_level, cx, cy)
-            Keys of all newly added child patches.
+        -- list of (child_level, cx, cy): Keys of all newly added child patches.
 
         Raises
-        ------
-        KeyError  : patch is not currently active.
-        ValueError: already at min_level (cannot zoom further).
+        -- KeyError  : patch is not currently active.
+        -- ValueError: already at min_level (cannot zoom further).
         """
         key = (lvl, x, y)
         if key not in self.active_patches:
             raise KeyError(f"Patch {key} is not in active_patches")
         if lvl <= self.min_level:
-            raise ValueError(
-                f"Cannot zoom patch at min_level {self.min_level}"
-            )
+            raise ValueError(f"Cannot zoom patch at min_level {self.min_level}")
 
         # Move parent: active → zoomed.
         # In multistage mode, zoomable=False marks it as an interior node.
@@ -469,7 +532,9 @@ class WSI:
         if self.multistage:
             self.zoomed_patches[key] = {**parent_meta, "zoomable": False}
         else:
-            self.zoomed_patches[key] = {k: v for k, v in parent_meta.items() if k != "zoomable"}
+            self.zoomed_patches[key] = {
+                k: v for k, v in parent_meta.items() if k != "zoomable"
+            }
 
         child_level = lvl - 1
         added: list[tuple[int, int, int]] = []
@@ -493,31 +558,26 @@ class WSI:
         Replace the active set with the output of HUMBE (or any external
         hierarchical budget enforcer).
 
-        Parameters
-        ----------
-        selected_coords : List[(lvl, x, y)]
+        Parameters:
+        -- selected_coords (List[(lvl, x, y)])
             Final leaf patches that HUMBE decided to keep.
-        zoomed_coords : List[(lvl, x, y)], optional
+        -- zoomed_coords (List[(lvl, x, y)], optional)
             Intermediate patches that HUMBE expanded.  Recorded in
             zoomed_patches so the visualiser can render them separately.
         """
-        self.active_patches = {
-            (lvl, x, y): {} for lvl, x, y in selected_coords
-        }
-        self.zoomed_patches = {
-            (lvl, x, y): {} for lvl, x, y in (zoomed_coords or [])
-        }
+        self.active_patches = {(lvl, x, y): {} for lvl, x, y in selected_coords}
+        self.zoomed_patches = {(lvl, x, y): {} for lvl, x, y in (zoomed_coords or [])}
 
+    # =========================================================================
+    # Metadata Management
+    # =========================================================================
     def set_patch_metadata(self, lvl: int, x: int, y: int, metadata: dict) -> None:
         """
-        Merge ``metadata`` into the stored dict for an active or zoomed patch.
+        Attach metadata to patch (active or zoomed).
 
-        Uses dict.update() semantics: existing keys not present in ``metadata``
-        are preserved.  Raises KeyError if the patch is in neither dict.
-
-        When ``multistage=False`` the ``zoomable`` key is silently stripped
-        from ``metadata`` before storing — zoom eligibility is unconditional
-        in single-stage mode and must not be overridden via metadata.
+        Important:
+        - merges instead of overwriting
+        - strips "zoomable" in single-stage mode
         """
         if not self.multistage:
             metadata = {k: v for k, v in metadata.items() if k != "zoomable"}
@@ -530,39 +590,57 @@ class WSI:
             raise KeyError(f"Patch {key} is neither active nor zoomed")
 
     def get_patch_metadata(self, lvl: int, x: int, y: int) -> dict:
-        """Return the metadata dict for an active or zoomed patch, or {} if not found."""
+        """
+        Return the metadata dict for an active or zoomed patch.
+        Return {} if not found.
+        """
         key = (lvl, x, y)
         if key in self.active_patches:
             return self.active_patches[key]
         return self.zoomed_patches.get(key, {})
 
+    # =========================================================================
+    # Patch Eligibility
+    # =========================================================================
     def is_zoomable(self, lvl: int, x: int, y: int) -> bool:
         """
-        Return whether the patch at (lvl, x, y) is eligible to be zoomed.
-
-        * ``multistage=False``: always ``True`` — zoom eligibility is
-          unconditional in single-stage mode; the ``zoomable`` metadata key is
-          never consulted.
-        * ``multistage=True``: reads the ``zoomable`` flag from the patch's
-          metadata dict.  Defaults to ``True`` if the key is
-          absent (safe for virtual children that carry no metadata).
+        Return True if patch is eligible for zooming.
         """
         if not self.multistage:
             return True
         return self.get_patch_metadata(lvl, x, y).get("zoomable", True)
 
     def is_active(self, lvl: int, x: int, y: int) -> bool:
-        """Return True if (lvl, x, y) is a current leaf in active_patches."""
+        """
+        Return True if patch is currently active.
+        """
         return (lvl, x, y) in self.active_patches
 
     def get_active_patches(self) -> list[tuple[int, int, int]]:
-        """Return a sorted list of all active (level, x, y) keys."""
+        """
+        Return a sorted list of all active (level, x, y) keys.
+        """
         return sorted(self.active_patches.keys())
 
     def active_patch_count(self) -> int:
-        """Return the number of currently active patches."""
+        """
+        Return the number of currently active patches.
+        """
         return len(self.active_patches)
 
+    # =========================================================================
+    # Reset
+    # =========================================================================
+    def reset(self) -> None:
+        """
+        Reset to the initial flat-grid state: all patches at max_level.
+        Equivalent to calling _init_root_patches().
+        """
+        self._init_root_patches()
+
+    # =========================================================================
+    # Visualize
+    # =========================================================================
     def dump_zoomable_grid(
         self,
         output_path: str = "./data/visualizations/property.html",
@@ -576,15 +654,11 @@ class WSI:
         or info not present).
 
         Parameters
-        ----------
-        output_path : str
-            Path to write the HTML file.
-        title : str
-            Heading text shown at the top of the page.
+        -- output_path (str): Path to write the HTML file.
+        -- title (str): Heading text shown at the top of the page.
 
-        Returns
-        -------
-        str  Path to the saved file.
+        Returns:
+        -- str: Path to the saved file.
         """
         all_levels: set[int] = set()
         for lvl, info in self.levels_info.items():
@@ -637,7 +711,8 @@ class WSI:
                 table_rows.append(f"<tr>{''.join(tds)}</tr>")
 
             level_type = info.get("type", "?")
-            rows_html.append(f"""
+            rows_html.append(
+                f"""
 <section>
   <h2>Level {lvl} &nbsp;<small>({level_type}, {cols}&thinsp;&times;&thinsp;{rows} patches &mdash; active: {n_active}, zoomed: {n_zoomed})</small></h2>
   <div class="scroll">
@@ -645,7 +720,8 @@ class WSI:
     {''.join(table_rows)}
   </table>
   </div>
-</section>""")
+</section>"""
+            )
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -687,37 +763,31 @@ class WSI:
             "active": len(self.active_patches),
             "zoomed": len(self.zoomed_patches),
         }
-        print(f"[WSI zoomable-grid] Saved \u2192 {output_path}  "
-              f"(active={totals['active']}, zoomed={totals['zoomed']})")
+        print(
+            f"[WSI zoomable-grid] Saved \u2192 {output_path}  "
+            f"(active={totals['active']}, zoomed={totals['zoomed']})"
+        )
         return output_path
-
-    def reset(self) -> None:
-        """
-        Reset to the initial flat-grid state: all patches at max_level.
-        Equivalent to calling _init_root_patches().
-        """
-        self._init_root_patches()
 
     def visualize(
         self,
         output_html: str = "./data/visualizations/visualization.html",
         metadata: dict | None = None,
+        image_label: str | None = None,
     ) -> str:
         """
         Render an HTML visualization of the current active / zoomed patch state.
 
-        Parameters
-        ----------
-        output_html : str
-            Path to write the HTML file.
-        metadata : dict, optional
-            Key-value pairs shown as a header in the sidebar.
-            Example: {"Method": "HUMBE", "Image": "slide.svs", "Budget": "25%"}
+        Parameters:
+        -- output_html (str): Path to write the HTML file.
+        -- metadata (dict, optional): Key-value pairs shown as a header in the sidebar.
+            Example: {"Method": "HUMBE", "Image": "slide.svs",
+            "Budget": "25%"}
+        -- image_label (str, optional): Separate image label rendered in the stats section.
+            If None, displays "Unknown".
 
-        Returns
-        -------
-        str
-            Path to the saved HTML file.
+        Returns:
+        -- str: Path to the saved HTML file.
         """
         # -----------------------------------------------------------------
         # 1. WSI thumbnail (always at max_level for the overview)
@@ -800,35 +870,43 @@ class WSI:
             meta = self.active_patches[(lvl, x, y)]
             score_str = f"{meta.get('score', '')}" if meta else ""
             active_counts[lvl] = active_counts.get(lvl, 0) + 1
-            overlays.append({
-                "x": X, "y": Y, "size": S,
-                "level": lvl,
-                "type": "active",
-                "orig_x": x, "orig_y": y,
-                "score": score_str,
-                "fill": active_color(lvl),
-                "border": active_border(lvl),
-            })
+            overlays.append(
+                {
+                    "x": X,
+                    "y": Y,
+                    "size": S,
+                    "level": lvl,
+                    "type": "active",
+                    "orig_x": x,
+                    "orig_y": y,
+                    "score": score_str,
+                    "fill": active_color(lvl),
+                    "border": active_border(lvl),
+                }
+            )
 
         for lvl, x, y in self.zoomed_patches:
             X, Y, S = to_thumb(lvl, x, y, self.patch_size)
             zoomed_counts[lvl] = zoomed_counts.get(lvl, 0) + 1
-            overlays.append({
-                "x": X, "y": Y, "size": S,
-                "level": lvl,
-                "type": "zoomed",
-                "orig_x": x, "orig_y": y,
-                "score": "",
-                "fill": zoomed_fill,
-                "border": zoomed_border,
-            })
+            overlays.append(
+                {
+                    "x": X,
+                    "y": Y,
+                    "size": S,
+                    "level": lvl,
+                    "type": "zoomed",
+                    "orig_x": x,
+                    "orig_y": y,
+                    "score": "",
+                    "fill": zoomed_fill,
+                    "border": zoomed_border,
+                }
+            )
 
         # -----------------------------------------------------------------
         # 5. Build HTML
         # -----------------------------------------------------------------
-        level_ids = sorted(
-            set(list(active_counts.keys()) + list(zoomed_counts.keys()))
-        )
+        level_ids = sorted(set(list(active_counts.keys()) + list(zoomed_counts.keys())))
         if not level_ids:
             level_ids = [thumb_level]
 
@@ -838,22 +916,24 @@ class WSI:
             if not self.levels_info[lvl].get("frozen", False)
         )
 
+        image_label_display = image_label if image_label else "Unknown"
+
         metadata_html = ""
         if metadata:
             rows = "".join(
                 f'<div class="meta-row">'
                 f'<span class="meta-key">{k}</span>'
                 f'<span class="meta-val">{v}</span>'
-                f'</div>'
+                f"</div>"
                 for k, v in metadata.items()
             )
             metadata_html = (
                 f'<div class="meta-section">'
                 f'<div class="meta-toggle" onclick="toggleMeta()" title="Toggle metadata">'
                 f'Metadata <span id="meta-arrow">&#9654;</span>'
-                f'</div>'
+                f"</div>"
                 f'<div class="meta-table" id="meta-body" style="display:none">{rows}</div>'
-                f'</div>'
+                f"</div>"
             )
 
         level_state_json = json.dumps(
@@ -1002,6 +1082,7 @@ class WSI:
     <div id="control-panel">
         <h3>WSI Patch Visualization</h3>
 {metadata_html}
+    <div class="stat">Image: <strong>{image_label_display}</strong></div>
         <div class="stat">All patches (pyramid): <strong>{total_all}</strong></div>
         <div class="stat">Active patches: <strong>{len(self.active_patches)}</strong></div>
         <div class="stat">Zoomed-past patches: <strong>{len(self.zoomed_patches)}</strong></div>
@@ -1091,7 +1172,9 @@ class WSI:
             f.write(html)
 
         print(f"[WSI viz] Saved \u2192 {output_html}")
-        print(f"  active : {len(self.active_patches)} patches across levels "
-              f"{sorted(active_counts)}")
+        print(
+            f"  active : {len(self.active_patches)} patches across levels "
+            f"{sorted(active_counts)}"
+        )
         print(f"  zoomed : {len(self.zoomed_patches)} patches")
         return output_html

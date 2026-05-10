@@ -1,4 +1,0 @@
-module_name: "tissue_presence_penalty"
-params:
-  weight: 1.0
-  

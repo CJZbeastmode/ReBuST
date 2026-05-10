@@ -1,7 +1,0 @@
-https://link.springer.com/article/10.1007/BF00992698
-https://scispace.com/pdf/self-improving-reactive-agents-based-on-reinforcement-4bh4oqtu6n.pdf (replay buffers)
-https://arxiv.org/html/2502.14365 (ill posed?)
-https://proceedings.neurips.cc/paper_files/paper/2010/file/091d584fced301b442654dd8c23b3fc9-Paper.pdf (issue)
-https://www.nature.com/articles/nature14236#figures
-
-https://www-sop.inria.fr/members/Eitan.Altman/TEMP/h.pdf (Contraint Markov)

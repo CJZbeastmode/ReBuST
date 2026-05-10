@@ -1,3 +1,5 @@
+"""Module for no dupes."""
+
 import json
 
 # ==========================

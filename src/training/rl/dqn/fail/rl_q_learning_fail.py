@@ -1,3 +1,5 @@
+"""Module for rl q learning fail."""
+
 # B_qlearning_full.py
 
 import random
@@ -49,11 +51,12 @@ class QNet(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-    
+
 
 # =========================
 # Reply Buffer
 # =========================
+
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -126,7 +129,6 @@ class DQNAgent:
             )
         )
 
-
     def train_step(self, batch_size=64):
         # Warm-up: wait until buffer has enough samples
         if len(self.buffer) < max(batch_size, 1000):
@@ -141,7 +143,9 @@ class DQNAgent:
 
         # Q(s,a)
         q_vals = self.q(states)  # (B, 2)
-        q_sa = q_vals.gather(1, actions.unsqueeze(1)).squeeze(1)  # (B,) - select Q-value for taken action
+        q_sa = q_vals.gather(1, actions.unsqueeze(1)).squeeze(
+            1
+        )  # (B,) - select Q-value for taken action
 
         # Build q_next with masking for terminal transitions
         with torch.no_grad():
@@ -157,7 +161,9 @@ class DQNAgent:
                 q_next_vals = self.q_target(ns_batch).max(1)[0]  # (B_nt,)
                 q_next[torch.tensor(non_terminal_idx, device=self.device)] = q_next_vals
 
-            target = rewards + self.gamma * q_next  # (B,) - q_next already 0 for terminals
+            target = (
+                rewards + self.gamma * q_next
+            )  # (B,) - q_next already 0 for terminals
 
         loss = nn.functional.mse_loss(q_sa, target)
 
@@ -186,9 +192,11 @@ class DQNAgent:
         action = torch.argmax(q_vals).item()
         return action, q_vals.cpu().numpy()
 
+
 # =========================
 # TRAINING LOOP
 # =========================
+
 
 def run_episode_dqn(env, agent, lambda_zoom, device, max_steps):
     state = torch.tensor(env.reset(), dtype=torch.float32, device=device)
@@ -204,7 +212,7 @@ def run_episode_dqn(env, agent, lambda_zoom, device, max_steps):
 
         # ALTERED: Use raw reward directly (env step() returns immediate reward/score difference)
         # No manual delta computation needed
-        
+
         # ---- cost definition (same as A2C) ----
         cost = 1.0 if action == 1 else 0.0
         zoom_count += int(cost)
@@ -221,16 +229,16 @@ def run_episode_dqn(env, agent, lambda_zoom, device, max_steps):
             next_state_t = None
 
         agent.buffer.push(state, action, reward_eff, next_state_t, done)
-        
+
         agent.action_count += 1
-        
+
         # Train every N steps instead of every step
         if agent.action_count % agent.train_frequency == 0:
             agent.train_step(batch_size=64)
-        
+
         # Decay epsilon per step
         agent.decay_eps()
-        
+
         steps += 1
 
         if done:
@@ -289,10 +297,10 @@ def main():
     # --------------------------------------------------
     t0 = time.time()
     from src.utils.embedder import Embedder
-    
+
     # Create shared embedder to avoid loading multiple models
     embedder = Embedder(img_backend="plip", device=device)
-    
+
     wsi0 = WSI(os.path.join(args.images_dir, train_images[0]), embedder=embedder)
     env0 = DynamicPatchEnv(wsi0, patch_score=args.score_module)
     state_dim = len(env0.reset())
@@ -319,7 +327,7 @@ def main():
     for epoch in range(args.epochs):
         print(f"\n=== Epoch {epoch+1}/{args.epochs} ===")
         epoch_rewards = []
-        
+
         for img in train_images:
             wsi = WSI(os.path.join(args.images_dir, img), embedder=embedder)
             env = DynamicPatchEnv(wsi, patch_score=args.score_module)
@@ -346,12 +354,13 @@ def main():
             path = os.path.join(args.output, "dqn_backup.pt")
             torch.save(agent.q.state_dict(), path)
             print(f"Model saved to {path}")
-        
+
         t1 = time.time()
         elapsed = t1 - t0
-        print(f"Epoch {epoch+1} mean reward: {sum(epoch_rewards)/len(epoch_rewards):.3f}")
+        print(
+            f"Epoch {epoch+1} mean reward: {sum(epoch_rewards)/len(epoch_rewards):.3f}"
+        )
         print(f"Time elapsed after epoch {epoch+1}, image {img}: {elapsed:.1f} sec")
-
 
     # --------------------------------------------------
     # Save model

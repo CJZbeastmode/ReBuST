@@ -26,25 +26,28 @@ if repo_root not in sys.path:
 from src.utils.wsi import WSI
 from src.utils.patch_scores import PATCH_SCORE_MODULES
 from src.global_budget_enforcer.HUMBE import humbe
-from src.inference.a2c.infer_rl_a2c import infer_wsi_a2c
+from src.inference.rl.a2c.infer_rl_a2c import infer_wsi_a2c
 
 
 # ============================================================
 # Defaults — change here or override via CLI flags
 # ============================================================
 
-DEFAULT_IMAGE  = "data/to_test_image/test_img_1.svs"
-DEFAULT_MODEL  = "data/models/rl/a2c_lvl4/a2c_lvl4_final.pt"
-DEFAULT_BUDGET = 0.8          # fraction of total pyramid patches to keep after HUMBE
-DEFAULT_SCORE  = "text_align_score"
-DEFAULT_MIN_LEVEL = 0          # finest level A2C/HUMBE may zoom into (0 = native full res)
-DEFAULT_OUT_GLOBAL = "data/visualizations/sandbox_humbe.html"
-DEFAULT_OUT_LOCAL = "data/visualizations/sandbox_final.html"
-
+# DEFAULT_IMAGE  = "data/to_test_image/test_img_1.svs"
+DEFAULT_IMAGE = "/Volumes/Xbox_HD/Data/med_img/TCGA-05-4250-LUAD.svs"
+DEFAULT_MODEL = "data/models/rl/a2c/a2c.pt"
+DEFAULT_BUDGET = 0.8  # fraction of total pyramid patches to keep after HUMBE
+DEFAULT_SCORE = "text_align_score"
+DEFAULT_MIN_LEVEL = 0  # finest level A2C/HUMBE may zoom into (0 = native full res)
+# DEFAULT_OUT_GLOBAL = "data/visualizations/pipelines/p_humbe_a2c_viz_1.html"
+# DEFAULT_OUT_LOCAL = "data/visualizations/pipelines/p_humbe_a2c_viz_2.html"
+DEFAULT_OUT_GLOBAL = "data/visualizations/p_humbe_a2c_viz_1.html"
+DEFAULT_OUT_LOCAL = "data/visualizations/p_humbe_a2c_viz_2.html"
 
 # ============================================================
 # Pipeline
 # ============================================================
+
 
 def run_pipeline(
     image_path: str,
@@ -96,7 +99,7 @@ def run_pipeline(
     print("\n[SANDBOX] ── Step 2: HUMBE ──────────────────────────────")
 
     score_module = PATCH_SCORE_MODULES[score_key]()
-    
+
     wsi = humbe(
         wsi,
         score_module=score_module,
@@ -105,14 +108,16 @@ def run_pipeline(
         viz_metadata={"Image": Path(image_path).name, "Stage": "after HUMBE"},
     )
 
-    print(f"[SANDBOX] After HUMBE  — active={wsi.active_patch_count()}  "
-          f"zoomed={len(wsi.zoomed_patches)}")
+    print(
+        f"[SANDBOX] After HUMBE  — active={wsi.active_patch_count()}  "
+        f"zoomed={len(wsi.zoomed_patches)}"
+    )
     print(f"[SANDBOX] HUMBE viz  → {out_global}")
 
-    #wsi.dump_zoomable_grid(
+    # wsi.dump_zoomable_grid(
     #    output_path="data/visualizations/property.html",
     #    title=f"Zoomable grid after HUMBE — {Path(image_path).name}",
-    #)
+    # )
 
     # ------------------------------------------------------------------
     # Step 3 — A2C: local per-patch refinement
@@ -125,14 +130,16 @@ def run_pipeline(
         output_html=out_local,
         deterministic=deterministic,
         viz_metadata={
-            "Image":  Path(image_path).name,
+            "Image": Path(image_path).name,
             "Budget": f"{budget_ratio:.0%}",
-            "Stage":  "after A2C Level-4",
+            "Stage": "after A2C Level-4",
         },
     )
 
-    print(f"[SANDBOX] After A2C      — active={wsi.active_patch_count()}  "
-          f"zoomed={len(wsi.zoomed_patches)}")
+    print(
+        f"[SANDBOX] After A2C      — active={wsi.active_patch_count()}  "
+        f"zoomed={len(wsi.zoomed_patches)}"
+    )
     print(f"[SANDBOX] Final viz    → {out_local}")
 
     # ------------------------------------------------------------------
@@ -151,46 +158,52 @@ if __name__ == "__main__":
         description="HUMBE → A2C refinement → visualization sandbox"
     )
     parser.add_argument(
-        "--image",  default=DEFAULT_IMAGE,
-        help=f"Path to .svs slide (default: {DEFAULT_IMAGE})"
+        "--image",
+        default=DEFAULT_IMAGE,
+        help=f"Path to .svs slide (default: {DEFAULT_IMAGE})",
     )
     parser.add_argument(
-        "--model",  default=DEFAULT_MODEL,
-        help=f"Path to A2C checkpoint (default: {DEFAULT_MODEL})"
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"Path to A2C checkpoint (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
-        "--budget", type=float, default=DEFAULT_BUDGET,
-        help=f"HUMBE budget ratio (default: {DEFAULT_BUDGET})"
+        "--budget",
+        type=float,
+        default=DEFAULT_BUDGET,
+        help=f"HUMBE budget ratio (default: {DEFAULT_BUDGET})",
     )
     parser.add_argument(
-        "--score",  default=DEFAULT_SCORE,
-        help=f"Patch score module key (default: {DEFAULT_SCORE})"
+        "--score",
+        default=DEFAULT_SCORE,
+        help=f"Patch score module key (default: {DEFAULT_SCORE})",
     )
     parser.add_argument(
-        "--out-global", default=DEFAULT_OUT_GLOBAL,
-        help="HTML output path after HUMBE"
+        "--out-global", default=DEFAULT_OUT_GLOBAL, help="HTML output path after HUMBE"
     )
     parser.add_argument(
-        "--out-local", default=DEFAULT_OUT_LOCAL,
-        help="HTML output path after A2C"
+        "--out-local", default=DEFAULT_OUT_LOCAL, help="HTML output path after A2C"
     )
     parser.add_argument(
-        "--min-level", type=int, default=DEFAULT_MIN_LEVEL,
-        help=f"Finest zoom level allowed (default: {DEFAULT_MIN_LEVEL}, 0 = native full res)"
+        "--min-level",
+        type=int,
+        default=DEFAULT_MIN_LEVEL,
+        help=f"Finest zoom level allowed (default: {DEFAULT_MIN_LEVEL}, 0 = native full res)",
     )
     parser.add_argument(
-        "--stochastic", action="store_true",
-        help="Use stochastic policy sampling (default: deterministic argmax)"
+        "--stochastic",
+        action="store_true",
+        help="Use stochastic policy sampling (default: deterministic argmax)",
     )
     args = parser.parse_args()
 
     run_pipeline(
-        image_path    = args.image,
-        model_path    = args.model,
-        budget_ratio  = args.budget,
-        score_key     = args.score,
-        min_level     = args.min_level,
-        out_global    = args.out_global,
-        out_local     = args.out_local,
-        deterministic = not args.stochastic,
+        image_path=args.image,
+        model_path=args.model,
+        budget_ratio=args.budget,
+        score_key=args.score,
+        min_level=args.min_level,
+        out_global=args.out_global,
+        out_local=args.out_local,
+        deterministic=not args.stochastic,
     )

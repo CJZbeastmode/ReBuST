@@ -19,3 +19,28 @@ python scripts/build_faiss_txt.py
 
 To mention:
 PLIP + plip result
+
+## Validate information-gain proxies
+
+Use this script to compare entropy/contrastive/centroid proxy scores against
+actual downstream label gain with MI proxies and rank correlation.
+
+```fish
+python scripts/validate_info_gain_proxy.py \
+	--csv data/benchmark/proxy_eval.csv \
+	--score-cols entropy_score contrastive_score centroid_score \
+	--gain-col downstream_gain \
+	--out-csv data/benchmark/proxy_eval_ranked.csv \
+	--out-json data/benchmark/proxy_eval_ranked.json \
+	--plot-dir data/visualizations/proxy_eval
+```
+
+If your CSV does not have a direct gain column, pass before/after metrics:
+
+```fish
+python scripts/validate_info_gain_proxy.py \
+	--csv data/benchmark/proxy_eval.csv \
+	--score-cols entropy_score contrastive_score centroid_score \
+	--before-col accuracy_before \
+	--after-col accuracy_after
+```

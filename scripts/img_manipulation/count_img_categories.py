@@ -1,3 +1,5 @@
+"""Module for count img categories."""
+
 import os
 import json
 from collections import defaultdict
@@ -5,7 +7,7 @@ from collections import defaultdict
 # ==========================
 # CONFIG (EDIT HERE)
 # ==========================
-DATA_DIR = "/Volumes/Xbox_HD/data/med_img"
+DATA_DIR = "/Volumes/Xbox_HD/data/med_img/train"
 FILE_EXT = ".svs"
 OUTPUT_JSON = "image_counts_per_category.json"
 # ==========================

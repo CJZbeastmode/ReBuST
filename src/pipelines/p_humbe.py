@@ -32,17 +32,18 @@ from src.global_budget_enforcer.HUMBE import humbe
 # Defaults — change here or override via CLI flags
 # ============================================================
 
-DEFAULT_IMAGE  = "data/to_test_image/test_img_1.svs"
-DEFAULT_MODEL  = "data/models/rl/a2c_lvl4/a2c_lvl4_final.pt"
-DEFAULT_BUDGET = 0.8          # fraction of total pyramid patches to keep after HUMBE_B
-DEFAULT_SCORE  = "text_align_score"
-DEFAULT_MIN_LEVEL = 0          # finest level A2C/HUMBE may zoom into (0 = native full res)
-DEFAULT_OUT = "data/visualizations/single_stage_global.html"
+DEFAULT_IMAGE = "data/to_test_image/test_img_1.svs"
+DEFAULT_MODEL = "data/models/rl/a2c/a2c.pt"
+DEFAULT_BUDGET = 0.5  # fraction of total pyramid patches to keep after HUMBE_B
+DEFAULT_SCORE = "text_align_score"
+DEFAULT_MIN_LEVEL = 0  # finest level A2C/HUMBE may zoom into (0 = native full res)
+DEFAULT_OUT = "data/visualizations/pipelines/p_humbe_viz.html"
 
 
 # ============================================================
 # Pipeline
 # ============================================================
+
 
 def run_pipeline(
     image_path: str,
@@ -92,7 +93,7 @@ def run_pipeline(
     print("\n[SANDBOX] ── Step 2: HUMBE ──────────────────────────────")
 
     score_module = PATCH_SCORE_MODULES[score_key]()
-    
+
     wsi = humbe(
         wsi,
         score_module=score_module,
@@ -101,14 +102,16 @@ def run_pipeline(
         viz_metadata={"Image": Path(image_path).name, "Stage": "after HUMBE"},
     )
 
-    print(f"[SANDBOX] After HUMBE  — active={wsi.active_patch_count()}  "
-          f"zoomed={len(wsi.zoomed_patches)}")
+    print(
+        f"[SANDBOX] After HUMBE  — active={wsi.active_patch_count()}  "
+        f"zoomed={len(wsi.zoomed_patches)}"
+    )
     print(f"[SANDBOX] HUMBE viz  → {out}")
 
-    #wsi.dump_zoomable_grid(
+    # wsi.dump_zoomable_grid(
     #    output_path="data/visualizations/property.html",
     #    title=f"Zoomable grid after HUMBE — {Path(image_path).name}",
-    #)
+    # )
 
     # ------------------------------------------------------------------
     # Done
@@ -126,41 +129,46 @@ if __name__ == "__main__":
         description="HUMBE_B → A2C refinement → visualization sandbox"
     )
     parser.add_argument(
-        "--image",  default=DEFAULT_IMAGE,
-        help=f"Path to .svs slide (default: {DEFAULT_IMAGE})"
+        "--image",
+        default=DEFAULT_IMAGE,
+        help=f"Path to .svs slide (default: {DEFAULT_IMAGE})",
     )
     parser.add_argument(
-        "--model",  default=DEFAULT_MODEL,
-        help=f"Path to A2C checkpoint (default: {DEFAULT_MODEL})"
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"Path to A2C checkpoint (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
-        "--budget", type=float, default=DEFAULT_BUDGET,
-        help=f"HUMBE_B budget ratio (default: {DEFAULT_BUDGET})"
+        "--budget",
+        type=float,
+        default=DEFAULT_BUDGET,
+        help=f"HUMBE_B budget ratio (default: {DEFAULT_BUDGET})",
     )
     parser.add_argument(
-        "--score",  default=DEFAULT_SCORE,
-        help=f"Patch score module key (default: {DEFAULT_SCORE})"
+        "--score",
+        default=DEFAULT_SCORE,
+        help=f"Patch score module key (default: {DEFAULT_SCORE})",
+    )
+    parser.add_argument("--out", default=DEFAULT_OUT, help="HTML output path")
+    parser.add_argument(
+        "--min-level",
+        type=int,
+        default=DEFAULT_MIN_LEVEL,
+        help=f"Finest zoom level allowed (default: {DEFAULT_MIN_LEVEL}, 0 = native full res)",
     )
     parser.add_argument(
-        "--out", default=DEFAULT_OUT,
-        help="HTML output path"
-    )
-    parser.add_argument(
-        "--min-level", type=int, default=DEFAULT_MIN_LEVEL,
-        help=f"Finest zoom level allowed (default: {DEFAULT_MIN_LEVEL}, 0 = native full res)"
-    )
-    parser.add_argument(
-        "--stochastic", action="store_true",
-        help="Use stochastic policy sampling (default: deterministic argmax)"
+        "--stochastic",
+        action="store_true",
+        help="Use stochastic policy sampling (default: deterministic argmax)",
     )
     args = parser.parse_args()
 
     run_pipeline(
-        image_path    = args.image,
-        model_path    = args.model,
-        budget_ratio  = args.budget,
-        score_key     = args.score,
-        min_level     = args.min_level,
-        out           = args.out,
-        deterministic = not args.stochastic,
+        image_path=args.image,
+        model_path=args.model,
+        budget_ratio=args.budget,
+        score_key=args.score,
+        min_level=args.min_level,
+        out=args.out,
+        deterministic=not args.stochastic,
     )

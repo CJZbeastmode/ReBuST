@@ -1,3 +1,5 @@
+"""Module for remove img if necessary."""
+
 import json
 import os
 

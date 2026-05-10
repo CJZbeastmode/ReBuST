@@ -1,5 +1,10 @@
+"""
+Module defining the PatchNode class, which represents a node in the patch hierarchy tree.
+"""
+
 from typing import Optional
 from .wsi import WSI
+
 
 class PatchNode:
     def __init__(
@@ -10,6 +15,16 @@ class PatchNode:
         y: int,
         wsi: WSI,
     ):
+        """
+        Initialize a PatchNode.
+
+        Args:
+        -- depth (int): how many times this node has been zoomed in from the root
+        -- max_depth (int): maximum allowed depth (zoom levels) for any node
+        -- x (int): x coordinate of this patch in the WSI grid at its level
+        -- y (int): y coordinate of this patch in the WSI grid at its level
+        -- wsi (WSI): WSI object needed for expansion
+        """
         self.depth = depth
         self.max_depth = max_depth
         self.x = x
@@ -20,14 +35,10 @@ class PatchNode:
 
         self._expand_children(wsi)
 
-
     def _expand_children(self, wsi):
         """
         Fully initialize all children of this node (one level down),
         if depth < max_depth. Uses WSI geometry.
-
-        This method is deterministic and idempotent:
-        - calling it twice does nothing extra
         """
         if not self.can_zoom():
             return
@@ -48,7 +59,9 @@ class PatchNode:
         if not child_grids:
             return
 
+        # Iterate over child grids and create child nodes
         for grid in child_grids:
+            # Iterate over child grid coordinates and create child nodes
             for cx, cy in grid:
                 child_node = PatchNode(
                     depth=self.depth + 1,
@@ -60,14 +73,22 @@ class PatchNode:
                 child_node.parent = self
                 self.children.append(child_node)
 
-
     def is_leaf(self) -> bool:
+        """
+        Check if this node is a leaf (i.e. has no children).
+        """
         return len(self.children) == 0
 
     def remaining_depth(self) -> int:
+        """
+        Return how many more times this node can be zoomed in before reaching max_depth.
+        """
         return self.max_depth - self.depth
 
     def can_zoom(self) -> bool:
+        """
+        Check if this node can be zoomed in (i.e. has children) based on depth.
+        """
         return self.depth < self.max_depth
 
     def list_all_descendants(
@@ -77,15 +98,14 @@ class PatchNode:
     ) -> list["PatchNode"]:
         """
         Recursively list all descendants of `node` down to max_depth.
-        Children are expanded lazily using node.expand(wsi).
 
         Args:
-            node: starting PatchNode (typically a root)
-            wsi: WSI object needed for expansion
-            include_self: whether to include `node` itself
+        -- node (PatchNode): starting PatchNode (typically a root)
+        -- wsi (WSI): WSI object needed for expansion
+        -- include_self (bool): whether to include `node` itself
 
         Returns:
-            List of PatchNode objects (all descendants)
+        -- List of PatchNode objects (all descendants)
         """
         result = []
 
@@ -99,6 +119,8 @@ class PatchNode:
 
         for child in children:
             result.append(child)
-            result.extend(PatchNode.list_all_descendants(child, wsi, include_self=False))
+            result.extend(
+                PatchNode.list_all_descendants(child, wsi, include_self=False)
+            )
 
         return result

@@ -106,7 +106,7 @@ def main(
         if os.path.exists(out_path) and not force:
             print(f"Skipping (exists): {case_id}")
             continue
-        
+
         print(f"Processing {case_id}...")
         try:
             data = extract_embeddings_for_wsi(
@@ -125,7 +125,9 @@ def main(
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Pre-extract PLIP embeddings for WSIs")
     p.add_argument(
-        "--images-dir", default="/Volumes/Xbox_HD/data/med_img", help="Directory with .svs images"
+        "--images-dir",
+        default="/Volumes/Xbox_HD/data/med_img",
+        help="Directory with .svs images",
     )
     p.add_argument(
         "--out-dir",

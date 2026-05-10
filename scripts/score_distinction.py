@@ -36,9 +36,8 @@ if repo_root not in sys.path:
 
 import os
 import json
-import math
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from src.utils.wsi import WSI
 from src.utils.patch_scores import (
@@ -56,10 +55,11 @@ from src.utils.patch_scores import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def score_to_color(score: float, vmin: float, vmax: float) -> str:
     """Map a score in [vmin, vmax] to a hex colour (green=high, red=low)."""
     span = vmax - vmin if vmax > vmin else 1.0
-    t = max(0.0, min(1.0, (score - vmin) / span))   # 0 = low, 1 = high
+    t = max(0.0, min(1.0, (score - vmin) / span))  # 0 = low, 1 = high
     r = int(220 * (1.0 - t))
     g = int(200 * t)
     b = 40
@@ -98,13 +98,13 @@ def extract_cancer_type_from_path(image_path: str) -> str:
 
 
 _SCORE_TYPE_ALIASES = {
-    "centroid":       "centroid",
-    "contrastive":    "contrastive",
-    "imgsim":         "imgsim",
-    "textalign":      "textalign",
-    "tissue":         "tissue",
+    "centroid": "centroid",
+    "contrastive": "contrastive",
+    "imgsim": "imgsim",
+    "textalign": "textalign",
+    "tissue": "tissue",
     "tissue_penalty": "tissue_penalty",
-    "entropy":        "entropy",
+    "entropy": "entropy",
 }
 
 
@@ -153,7 +153,9 @@ def build_scorer(score_type: str, cancer_type: str, embedder, neg_types: str = "
         if neg_types in ("all", "pairs"):
             resolved_neg = neg_types
         else:
-            resolved_neg = [t.strip().upper() for t in neg_types.split(",") if t.strip()]
+            resolved_neg = [
+                t.strip().upper() for t in neg_types.split(",") if t.strip()
+            ]
         scorer = ContrastiveTextScore(
             pos_cancer_type=cancer_type,
             neg_cancer_types=resolved_neg,
@@ -188,18 +190,21 @@ def build_scorer(score_type: str, cancer_type: str, embedder, neg_types: str = "
 # Main
 # ---------------------------------------------------------------------------
 
+
 def run(
     image_path: str,
     score_type: str,
     output_html: str,
-    neg_types: str = "all",           # "all" | "pairs" | comma-separated list
-    max_patches: int | None = None,   # per-level cap
+    neg_types: str = "all",  # "all" | "pairs" | comma-separated list
+    max_patches: int | None = None,  # per-level cap
 ):
     print(f"[INFO] Loading WSI: {image_path}")
     wsi = WSI(image_path)
 
-    print(f"[INFO] max_level={wsi.max_level}  min_level={wsi.min_level}  "
-          f"patch_size={wsi.patch_size}")
+    print(
+        f"[INFO] max_level={wsi.max_level}  min_level={wsi.min_level}  "
+        f"patch_size={wsi.patch_size}"
+    )
 
     # All non-frozen levels, coarsest → finest
     all_levels = sorted(
@@ -208,9 +213,13 @@ def run(
     )
     for lvl in all_levels:
         n = sum(1 for _ in wsi.iterate_patches(lvl))
-        capped = f"  (capped at {max_patches})" if max_patches and n > max_patches else ""
-        print(f"[INFO]   level {lvl:2d}  type={wsi.levels_info[lvl]['type']:9s}  "
-              f"size={str(wsi.levels_info[lvl]['size']):18s}  patches={n}{capped}")
+        capped = (
+            f"  (capped at {max_patches})" if max_patches and n > max_patches else ""
+        )
+        print(
+            f"[INFO]   level {lvl:2d}  type={wsi.levels_info[lvl]['type']:9s}  "
+            f"size={str(wsi.levels_info[lvl]['size']):18s}  patches={n}{capped}"
+        )
 
     # ------------------------------------------------------------------
     # Resolve cancer type (auto-detect from TCGA filename if not supplied)
@@ -227,14 +236,16 @@ def run(
     # Build scorer
     # ------------------------------------------------------------------
     print(f"[INFO] Building scorer: {score_type}  neg_types={neg_types} ...")
-    scorer = build_scorer(score_type, resolved_cancer_type, wsi.embedder, neg_types=neg_types)
+    scorer = build_scorer(
+        score_type, resolved_cancer_type, wsi.embedder, neg_types=neg_types
+    )
     print(f"[INFO] Scorer ready: {scorer.__class__.__name__}")
 
     # ------------------------------------------------------------------
     # Score every patch at every non-frozen level
     # ------------------------------------------------------------------
-    results = []      # list of {key, b64, score}
-    results_by_level: dict[int, list] = {}   # lvl → list of result dicts
+    results = []  # list of {key, b64, score}
+    results_by_level: dict[int, list] = {}  # lvl → list of result dicts
 
     for lvl in all_levels:
         coords = list(wsi.iterate_patches(lvl))
@@ -251,7 +262,9 @@ def run(
                 score = scorer.compute_stop(parent_patch=patch)
             except Exception as e:
                 print(f"[WARN] patch ({lvl},{x},{y}): {e}")
-                patch = Image.new("RGB", (wsi.patch_size, wsi.patch_size), (200, 200, 200))
+                patch = Image.new(
+                    "RGB", (wsi.patch_size, wsi.patch_size), (200, 200, 200)
+                )
                 score = 0.0
 
             patch_b64 = patch_to_b64(patch)
@@ -263,15 +276,19 @@ def run(
 
         lscores = [r["score"] for r in level_results]
         if lscores:
-            print(f"[SCORE]   level {lvl} done — "
-                  f"min={min(lscores):.4f}  max={max(lscores):.4f}  "
-                  f"mean={float(np.mean(lscores)):.4f}")
+            print(
+                f"[SCORE]   level {lvl} done — "
+                f"min={min(lscores):.4f}  max={max(lscores):.4f}  "
+                f"mean={float(np.mean(lscores)):.4f}"
+            )
 
     scores = [r["score"] for r in results]
     s_min, s_max = float(min(scores)), float(max(scores))
     s_mean = float(np.mean(scores))
-    print(f"[INFO] Overall score stats — "
-          f"min={s_min:.4f}  max={s_max:.4f}  mean={s_mean:.4f}")
+    print(
+        f"[INFO] Overall score stats — "
+        f"min={s_min:.4f}  max={s_max:.4f}  mean={s_mean:.4f}"
+    )
 
     # ------------------------------------------------------------------
     # WSI thumbnail (for the overview panel)
@@ -282,7 +299,9 @@ def run(
         thumbnail = wsi.synthetic_images[thumb_level].convert("RGB")
     else:
         tw, th = level_entry["size"]
-        thumbnail = wsi.slide.read_region((0, 0), level_entry["native_idx"], (tw, th)).convert("RGB")
+        thumbnail = wsi.slide.read_region(
+            (0, 0), level_entry["native_idx"], (tw, th)
+        ).convert("RGB")
 
     thumb_b64 = thumb_to_b64(thumbnail)
     thumb_w, thumb_h = thumbnail.size
@@ -303,11 +322,15 @@ def run(
         OY = int(y * ratio)
         OS = max(1, int(wsi.patch_size * ratio))
         col = score_to_color(r["score"], s_min, s_max)
-        overview_overlays.append({
-            "x": OX, "y": OY, "size": OS,
-            "score": f"{r['score']:.4f}",
-            "color": col,
-        })
+        overview_overlays.append(
+            {
+                "x": OX,
+                "y": OY,
+                "size": OS,
+                "score": f"{r['score']:.4f}",
+                "color": col,
+            }
+        )
 
     # ------------------------------------------------------------------
     # Render patch cards HTML — grouped by level
@@ -327,22 +350,25 @@ def run(
 
         cards_html_parts.append(
             f'<div class="level-header" id="level-{lvl}">'
-            f' Level {lvl}'
-            f' <small>({level_type} &nbsp;|&nbsp; {w}&thinsp;&times;&thinsp;{h}px'
-            f' &nbsp;|&nbsp; {n_cols}&thinsp;&times;&thinsp;{n_rows} patches'
-            f' &nbsp;|&nbsp; min={l_min:.4f} &nbsp; max={l_max:.4f} &nbsp; mean={l_mean:.4f})</small>'
-            f'</div>'
+            f" Level {lvl}"
+            f" <small>({level_type} &nbsp;|&nbsp; {w}&thinsp;&times;&thinsp;{h}px"
+            f" &nbsp;|&nbsp; {n_cols}&thinsp;&times;&thinsp;{n_rows} patches"
+            f" &nbsp;|&nbsp; min={l_min:.4f} &nbsp; max={l_max:.4f} &nbsp; mean={l_mean:.4f})</small>"
+            f"</div>"
         )
 
         for r in lvl_results:
             l, x, y = r["key"]
             sc = r["score"]
             col = score_to_color(sc, s_min, s_max)
-            brightness = (int(col[1:3], 16) * 0.299 +
-                          int(col[3:5], 16) * 0.587 +
-                          int(col[5:7], 16) * 0.114)
+            brightness = (
+                int(col[1:3], 16) * 0.299
+                + int(col[3:5], 16) * 0.587
+                + int(col[5:7], 16) * 0.114
+            )
             txt_col = "#000" if brightness > 128 else "#fff"
-            cards_html_parts.append(f"""
+            cards_html_parts.append(
+                f"""
         <div class="card" data-level="{lvl}">
             <div class="score-badge" style="background:{col}; color:{txt_col};">
                 {sc:.4f}
@@ -350,7 +376,8 @@ def run(
             <img class="patch-img" src="{r['b64']}" loading="lazy"
                  title="lvl={l} x={x} y={y}  score={sc:.6f}">
             <div class="card-footer">lvl={l}&nbsp; x={x}&nbsp; y={y}</div>
-        </div>""")
+        </div>"""
+            )
 
     cards_html = "\n".join(cards_html_parts)
 
@@ -366,20 +393,20 @@ def run(
             f'<div class="lvl-stat">'
             f'<span class="lvl-label">Level {lvl} <small>({level_type})</small></span>'
             f'<span class="lvl-nums">'
-            f'n={len(lvl_results)} &nbsp; '
-            f'min={min(lscores):.3f} &nbsp; '
-            f'max={max(lscores):.3f} &nbsp; '
-            f'mean={float(np.mean(lscores)):.3f}'
-            f'</span>'
+            f"n={len(lvl_results)} &nbsp; "
+            f"min={min(lscores):.3f} &nbsp; "
+            f"max={max(lscores):.3f} &nbsp; "
+            f"mean={float(np.mean(lscores)):.3f}"
+            f"</span>"
             f'<a class="lvl-jump" href="#level-{lvl}">↓ jump</a>'
-            f'</div>'
+            f"</div>"
         )
 
     # Level filter checkboxes for the controls bar
     level_filter_checks = " ".join(
         f'<label style="white-space:nowrap;">'
         f'<input type="checkbox" checked onchange="filterLevel({lvl}, this.checked)">'
-        f' L{lvl}</label>'
+        f" L{lvl}</label>"
         for lvl in all_levels
     )
 
@@ -756,29 +783,38 @@ if __name__ == "__main__":
         description="Visualise any PatchScoreModule score for all patches of a WSI."
     )
     parser.add_argument(
-        "--image", type=str,
+        "--image",
+        type=str,
         default="data/images/TCGA-18-4083-LUSC.svs",
         help="Path to the .svs file",
     )
     parser.add_argument(
-        "--score-type", type=str, default="centroid",
-        choices=["centroid", "contrastive", "imgsim", "textalign",
-                 "tissue", "tissue_penalty", "entropy"],
+        "--score-type",
+        type=str,
+        default="imgsim",
+        choices=[
+            "centroid",
+            "contrastive",
+            "imgsim",
+            "textalign",
+            "tissue",
+            "tissue_penalty",
+            "entropy",
+        ],
         help="Score type to visualise (default: contrastive)",
     )
     parser.add_argument(
-        "--neg-types", type=str, default="all",
+        "--neg-types",
+        type=str,
+        default="all",
         help="Negatives for contrastive scorer: 'all' (default), 'pairs' "
-             "(biologically curated CONTRASTIVE_PAIRS), or comma-separated "
-             "list e.g. 'LUSC,COAD'.",
+        "(biologically curated CONTRASTIVE_PAIRS), or comma-separated "
+        "list e.g. 'LUSC,COAD'.",
     )
     parser.add_argument(
-        "--output", type=str,
-        default="data/visualizations/contrastive_score_viz.html",
-        help="Output HTML path",
-    )
-    parser.add_argument(
-        "--max-patches", type=int, default=None,
+        "--max-patches",
+        type=int,
+        default=None,
         help="Limit to first N patches *per level* (for quick testing)",
     )
     args = parser.parse_args()
@@ -787,6 +823,6 @@ if __name__ == "__main__":
         image_path=args.image,
         score_type=args.score_type,
         neg_types=args.neg_types,
-        output_html=args.output,
+        output_html=f"data/visualizations/score_distinction/{args.score_type}.html",
         max_patches=args.max_patches,
     )

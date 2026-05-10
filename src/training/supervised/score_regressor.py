@@ -1,3 +1,5 @@
+"""Module for score regressor."""
+
 # Ensure repo root is on sys.path so `src` package imports work when running
 # this script directly (python src/training/supervised_score_regressor.py)
 import sys
@@ -159,27 +161,71 @@ def _cli():
 
 if __name__ == "__main__":
     print("Training A1...")
-    train(data_npz="data/supervised_dataset/a1.npz", model_out="data/models/supervised/score_regressor/a1.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/a1.npz",
+        model_out="data/models/supervised/score_regressor/a1.pth",
+        epochs=100,
+    )
     print("\nTraining A2...")
-    train(data_npz="data/supervised_dataset/a2.npz", model_out="data/models/supervised/score_regressor/a2.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/a2.npz",
+        model_out="data/models/supervised/score_regressor/a2.pth",
+        epochs=100,
+    )
     print("\nTraining A3...")
-    train(data_npz="data/supervised_dataset/a3.npz", model_out="data/models/supervised/score_regressor/a3.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/a3.npz",
+        model_out="data/models/supervised/score_regressor/a3.pth",
+        epochs=100,
+    )
     print("\nTraining B1...")
-    train(data_npz="data/supervised_dataset/b1.npz", model_out="data/models/supervised/score_regressor/b1.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/b1.npz",
+        model_out="data/models/supervised/score_regressor/b1.pth",
+        epochs=100,
+    )
     print("\nTraining B2...")
-    train(data_npz="data/supervised_dataset/b2.npz", model_out="data/models/supervised/score_regressor/b2.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/b2.npz",
+        model_out="data/models/supervised/score_regressor/b2.pth",
+        epochs=100,
+    )
     print("\nTraining C1...")
-    train(data_npz="data/supervised_dataset/c1.npz", model_out="data/models/supervised/score_regressor/c1.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/c1.npz",
+        model_out="data/models/supervised/score_regressor/c1.pth",
+        epochs=100,
+    )
     print("\nTraining C2...")
-    train(data_npz="data/supervised_dataset/c2.npz", model_out="data/models/supervised/score_regressor/c2.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/c2.npz",
+        model_out="data/models/supervised/score_regressor/c2.pth",
+        epochs=100,
+    )
     print("\nTraining D1...")
-    train(data_npz="data/supervised_dataset/d1.npz", model_out="data/models/supervised/score_regressor/d1.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/d1.npz",
+        model_out="data/models/supervised/score_regressor/d1.pth",
+        epochs=100,
+    )
     print("\nTraining D2...")
-    train(data_npz="data/supervised_dataset/d2.npz", model_out="data/models/supervised/score_regressor/d2.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/d2.npz",
+        model_out="data/models/supervised/score_regressor/d2.pth",
+        epochs=100,
+    )
     print("\nTraining E1...")
-    train(data_npz="data/supervised_dataset/e1.npz", model_out="data/models/supervised/score_regressor/e1.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/e1.npz",
+        model_out="data/models/supervised/score_regressor/e1.pth",
+        epochs=100,
+    )
     print("\nTraining E2...")
-    train(data_npz="data/supervised_dataset/e2.npz", model_out="data/models/supervised/score_regressor/e2.pth", epochs=100)
+    train(
+        data_npz="data/supervised_dataset/e2.npz",
+        model_out="data/models/supervised/score_regressor/e2.pth",
+        epochs=100,
+    )
 
 
 # Result

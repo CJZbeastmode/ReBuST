@@ -1,3 +1,5 @@
+"""Module for pick smallest images."""
+
 import json
 import os
 from collections import defaultdict

@@ -1,6 +1,9 @@
+"""Module for corrupt svs check."""
+
 import os
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.wsi import WSI
 from openslide import OpenSlideUnsupportedFormatError
@@ -22,7 +25,11 @@ def process_svs_images(directory_path, img_embedding_backend="plip"):
         return
 
     # Get all .svs files in the directory
-    image_paths = [os.path.join(directory_path, f) for f in os.listdir(directory_path) if f.lower().endswith(".svs")]
+    image_paths = [
+        os.path.join(directory_path, f)
+        for f in os.listdir(directory_path)
+        if f.lower().endswith(".svs")
+    ]
 
     if not image_paths:
         print(f"[INFO] No .svs images found in the directory: {directory_path}")
@@ -31,7 +38,7 @@ def process_svs_images(directory_path, img_embedding_backend="plip"):
     i = 0
     # Iterate over all images in the directory
     for image_path in image_paths:
-        #print(f"[INFO] Processing image: {image_path}")
+        # print(f"[INFO] Processing image: {image_path}")
         i += 1
         if i % 10 == 0:
             print(f"[INFO] Processed {i} images...")
@@ -39,8 +46,8 @@ def process_svs_images(directory_path, img_embedding_backend="plip"):
         try:
             # Try to load the image
             wsi = WSI(image_path, img_embedding_backend=img_embedding_backend)
-            #print(f"[SUCCESS] Successfully loaded image: {image_path}")
-        
+            # print(f"[SUCCESS] Successfully loaded image: {image_path}")
+
         except OpenSlideUnsupportedFormatError as e:
             print(f"[SKIP] OpenSlide cannot read: {image_path}. Error: {e}")
             continue
@@ -53,10 +60,11 @@ def process_svs_images(directory_path, img_embedding_backend="plip"):
 
     print("[INFO] Finished processing images.")
 
+
 # Main Execution
 if __name__ == "__main__":
     # Specify the directory where your .svs images are located
     directory_path = "/Volumes/Xbox_HD/data/med_img"  # Change this to the directory containing your .svs files
-    
+
     # Process the images
     process_svs_images(directory_path)

@@ -1,3 +1,5 @@
+"""Module for collect dataset."""
+
 import sys
 from pathlib import Path
 import time
@@ -19,10 +21,23 @@ from src.utils.dynamic_patch_env import DynamicPatchEnv
 from src.utils.wsi import WSI
 
 
+CLASS_AWARE_SCORES = {"cancer_centroid_score", "contrastive_text_score"}
+
+
+def resolve_image_class_from_path(image_path: str):
+    stem = os.path.splitext(os.path.basename(image_path))[0]
+    normalized = stem.replace("_", "-")
+    tokens = [tok.upper() for tok in normalized.split("-") if tok]
+    for token in reversed(tokens):
+        if token.isalpha() and 3 <= len(token) <= 6 and token != "TCGA":
+            return token
+    return None
+
+
 # =====================================================================
 # OPTIONAL BACKUP HELPER
 # =====================================================================
-def maybe_backup(states, scores, zoom_decisions, out_npz=None):
+def maybe_backup(states, scores, zoom_decisions, out_npz=None, image_classes=None):
     """
     Save a lightweight NPZ snapshot of the environment state.
 
@@ -46,12 +61,14 @@ def maybe_backup(states, scores, zoom_decisions, out_npz=None):
 
         if out_npz is not None:
             os.makedirs(os.path.dirname(out_npz) or ".", exist_ok=True)
-            np.savez_compressed(
-                out_npz,
-                states=states_np,
-                scores=scores_np,
-                zoom_decision=zoom_decisions_np,
-            )
+            payload = {
+                "states": states_np,
+                "scores": scores_np,
+                "zoom_decision": zoom_decisions_np,
+            }
+            if image_classes is not None:
+                payload["image_class"] = np.asarray(image_classes)
+            np.savez_compressed(out_npz, **payload)
 
         print("Backup dataset saving complete.")
     except Exception as e:
@@ -107,6 +124,8 @@ def collect_dataset(
     states = []
     scores = []
     zoom_decisions = []
+    collect_image_class = score_module in CLASS_AWARE_SCORES
+    image_classes = [] if collect_image_class else None
     collected = 0
 
     # -----------------------------------------------------------------
@@ -134,6 +153,7 @@ def collect_dataset(
             wsi,
             patch_score=score_module,
             patch_score_aggregation=score_module_aggregation,
+            image_class=resolve_image_class_from_path(image_path),
         )
 
         max_level = wsi.max_level
@@ -192,6 +212,8 @@ def collect_dataset(
                 states.append(state.astype(np.float32))
                 scores.append(np.asarray(score_pair, dtype=np.float32))
                 zoom_decisions.append(zoom_decision)
+                if collect_image_class:
+                    image_classes.append(env.image_class or "UNKNOWN")
                 collected += 1
 
                 # Optional hard cap on total samples
@@ -208,7 +230,13 @@ def collect_dataset(
 
         # Optional per-image backup snapshot
         try:
-            maybe_backup(states, scores, zoom_decisions, out_npz=out_npz)
+            maybe_backup(
+                states,
+                scores,
+                zoom_decisions,
+                out_npz=out_npz,
+                image_classes=image_classes,
+            )
         except Exception:
             pass
 
@@ -226,12 +254,14 @@ def collect_dataset(
 
     if out_npz is not None:
         os.makedirs(os.path.dirname(out_npz) or ".", exist_ok=True)
-        np.savez_compressed(
-            out_npz,
-            states=states_np,
-            scores=scores_np,
-            zoom_decision=zoom_decisions_np,
-        )
+        payload = {
+            "states": states_np,
+            "scores": scores_np,
+            "zoom_decision": zoom_decisions_np,
+        }
+        if image_classes is not None:
+            payload["image_class"] = np.asarray(image_classes)
+        np.savez_compressed(out_npz, **payload)
 
     print("Dataset collection complete.")
 

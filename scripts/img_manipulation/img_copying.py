@@ -1,3 +1,5 @@
+"""Module for img copying."""
+
 import json
 
 

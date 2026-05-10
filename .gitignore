@@ -20,8 +20,13 @@ test_*.svs
 kanban.txt
 roadmap.txt
 data/*
+archive
 archive/*
 model_doc/*
+.venv
+.venv/*
+.claude
+.claude/*
 
 .DS_Store
 **/.DS_Store

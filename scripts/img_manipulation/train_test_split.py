@@ -1,3 +1,5 @@
+"""Module for train test split."""
+
 import os
 import shutil
 import random
@@ -13,6 +15,7 @@ test_dir = "/Volumes/Xbox_HD/data/test"
 os.makedirs(val_dir, exist_ok=True)
 os.makedirs(test_dir, exist_ok=True)
 
+
 # Function to split the data by categories
 def split_data():
     # Get all files in the source directory
@@ -23,7 +26,7 @@ def split_data():
     for file in all_files:
         # Get the category from the filename (last part after the last hyphen)
         category = file.split("-")[-1].replace(".svs", "")
-        
+
         if category not in category_files:
             category_files[category] = []
         category_files[category].append(file)
@@ -42,8 +45,8 @@ def split_data():
 
         # Split the files into train, validation, and test sets
         train_files = files[:train_count]
-        val_files = files[train_count:train_count + val_count]
-        test_files = files[train_count + val_count:]
+        val_files = files[train_count : train_count + val_count]
+        test_files = files[train_count + val_count :]
 
         # Move files to the root of val_dir and test_dir
         for file in val_files:
@@ -52,7 +55,10 @@ def split_data():
         for file in test_files:
             shutil.move(os.path.join(source_dir, file), os.path.join(test_dir, file))
 
-        print(f"Category {category}: {len(train_files)} train, {len(val_files)} val, {len(test_files)} test")
+        print(
+            f"Category {category}: {len(train_files)} train, {len(val_files)} val, {len(test_files)} test"
+        )
+
 
 # Call the function to split the data
 split_data()

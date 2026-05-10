@@ -1,3 +1,5 @@
+"""Module for wsi classification plip."""
+
 # ============================================================
 # PLIP WSI-level Diagnosis Baseline (Attention MIL)
 # ============================================================
@@ -32,63 +34,62 @@ import time
 
 class PositionalEncoding(nn.Module):
     """Add learnable positional encodings to patch embeddings."""
+
     def __init__(self, d_model, max_len=10000):
         super().__init__()
         self.pos_embedding = nn.Parameter(torch.randn(1, max_len, d_model) * 0.02)
-    
+
     def forward(self, x):
         """
         x: [batch_size, seq_len, d_model] or [seq_len, d_model]
         """
         if x.dim() == 2:
             # Single WSI case: [N, d_model]
-            return x + self.pos_embedding[0, :x.size(0), :]
+            return x + self.pos_embedding[0, : x.size(0), :]
         else:
             # Batched case: [batch, N, d_model]
-            return x + self.pos_embedding[:, :x.size(1), :]
+            return x + self.pos_embedding[:, : x.size(1), :]
 
 
 class TransformerMIL(nn.Module):
     def __init__(
-        self, 
-        embed_dim=512, 
-        hidden_dim=256, 
+        self,
+        embed_dim=512,
+        hidden_dim=256,
         num_classes=2,
         num_heads=8,
         num_layers=2,
-        dropout=0.1
+        dropout=0.1,
     ):
         super().__init__()
-        
+
         # Project input embeddings to hidden dimension
         self.input_proj = nn.Linear(embed_dim, hidden_dim)
-        
+
         # Positional encoding for spatial context
         self.pos_encoding = PositionalEncoding(hidden_dim)
-        
+
         # Transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=num_heads,
             dim_feedforward=hidden_dim * 4,
             dropout=dropout,
-            activation='gelu',
-            batch_first=True
+            activation="gelu",
+            batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=num_layers
+            encoder_layer, num_layers=num_layers
         )
-        
+
         # Classification token (learnable)
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_dim) * 0.02)
-        
+
         # Classification head
         self.classifier = nn.Sequential(
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, num_classes)
+            nn.LayerNorm(hidden_dim), nn.Linear(hidden_dim, num_classes)
         )
-        
+
     def forward(self, x):
         """
         x: Tensor [N, 512]  (patch embeddings for ONE WSI)
@@ -96,32 +97,32 @@ class TransformerMIL(nn.Module):
         """
         # Project to hidden dimension: [N, hidden_dim]
         x = self.input_proj(x)
-        
+
         # Add positional encoding: [N, hidden_dim]
         x = self.pos_encoding(x)
-        
+
         # Prepend CLS token: [1, hidden_dim] -> [N+1, hidden_dim]
         cls_tokens = self.cls_token.expand(1, -1, -1)  # [1, 1, hidden_dim]
         x = x.unsqueeze(0)  # [1, N, hidden_dim]
         x = torch.cat([cls_tokens, x], dim=1)  # [1, N+1, hidden_dim]
-        
+
         # Apply transformer encoder
         # Note: we'll extract attention from the last layer for visualization
         encoded = self.transformer_encoder(x)  # [1, N+1, hidden_dim]
-        
+
         # Extract CLS token representation
         cls_output = encoded[:, 0, :]  # [1, hidden_dim]
-        
+
         # Classification
         logits = self.classifier(cls_output)  # [1, num_classes]
         logits = logits.squeeze(0)  # [num_classes]
-        
+
         # Extract attention weights from first layer for visualization
         # This is a simplified version - full attention extraction would require hooks
         attn_weights = self._get_attention_weights(x)
-        
+
         return logits, attn_weights
-    
+
     def _get_attention_weights(self, x):
         """
         Extract attention weights for visualization.
@@ -241,12 +242,12 @@ def train_plip_wsi_mil(
     loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
     model = TransformerMIL(
-        embed_dim=512, 
-        hidden_dim=256, 
+        embed_dim=512,
+        hidden_dim=256,
         num_classes=num_classes,
         num_heads=8,
         num_layers=2,
-        dropout=0.1
+        dropout=0.1,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)

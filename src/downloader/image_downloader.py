@@ -1,8 +1,27 @@
+"""
+Image downloader for TCGA WSIs (SVS).
+
+This module:
+- Queries TCGA (GDC API) for available cases per project
+- Computes proportional sampling across all cases
+- Selects cases not yet downloaded
+- Downloads one SVS slide per case
+
+Typical usage:
+    downloader = ImageDownloader(target_total=1000)
+    downloader.run()
+"""
+
 import requests
 import os
 from decimal import Decimal, ROUND_HALF_UP
 import json
 import time
+
+
+# =========================================================
+# Constants
+# =========================================================
 
 FIELDS = "cases.submitter_id,cases.project.project_id"
 GDC_FILES_ENDPOINT = "https://api.gdc.cancer.gov/files"
@@ -25,10 +44,32 @@ NORMAL_PROJECTS = [
     "TCGA-SKCM",
 ]
 
-RARE_PROJECTS = [] # TODO
+RARE_PROJECTS = []
+
+
+# =========================================================
+# Core Class
+# =========================================================
 
 
 class ImageDownloader:
+    """
+    Pipeline for querying, selecting, and downloading TCGA SVS images.
+
+    Workflow:
+        1. Query available cases per project
+        2. Compute sampling proportions
+        3. Select cases (excluding already downloaded)
+        4. Download one slide per case
+
+    Attributes:
+        target_total (int): Total number of images to download.
+        proportions (dict[str, float]): Project sampling proportions.
+        image_counts (dict[str, int]): Number of images per project.
+        fetched_images (dict[str, str]): Mapping case_id -> project.
+        DATA_DIR (str): Output directory for images.
+    """
+
     def __init__(
         self,
         target_total=1000,
@@ -42,6 +83,18 @@ class ImageDownloader:
         DATA_DIR=DATA_DIR,
         FILE_EXT=FILE_EXT,
     ):
+        """
+        Initialize downloader configuration.
+
+        Args:
+            target_total (int): Targeted total number of images.
+            proportions (dict, optional): Precomputed proportions.
+            image_count (dict, optional): Precomputed image counts.
+            fetched_images (dict, optional): Prefetched cases.
+            fetched_images_output_json (str, optional): Path to save selected cases.
+            PROJECTS (list[str]): TCGA projects to include.
+        """
+
         self.PROJECTS = PROJECTS
         self.target_total = target_total
         self.proportions = proportions
@@ -56,19 +109,46 @@ class ImageDownloader:
     # ---------------------------------------------------------
     # Helpers
     # ---------------------------------------------------------
+
     def _existing_cases_on_disk(self):
+        """
+        Scan DATA_DIR and extract existing TCGA case IDs.
+
+        Assumes filenames follow:
+            <case_id>-<project>.svs
+
+        Returns:
+            set[str]: Case IDs already exist locally.
+        """
+
         cases = set()
-        for fname in os.listdir(DATA_DIR):
-            if not fname.endswith(FILE_EXT):
+
+        # Iterate files in DATA_DIR
+        for fname in os.listdir(self.DATA_DIR):
+            # Skip non-SVS and hidden files
+            if not fname.endswith(self.FILE_EXT):
                 continue
-            name = fname[: -len(FILE_EXT)]
+            # Consruct case_id from filename
+            name = fname[: -len(self.FILE_EXT)]
             parts = name.split("-")
             if len(parts) >= 3:
                 case_id = "-".join(parts[:3])
                 cases.add(case_id)
+
         return cases
 
     def _query_tcga_cases(self, project_id):
+        """
+        Query GDC API for all cases in a project that have SVS slide images.
+
+        Args:
+            project_id (str): TCGA project (e.g., "TCGA-COAD")
+
+        Returns:
+            list[str]: Unique case submitter IDs.
+        """
+
+        # Metadata
         fields = "cases.submitter_id,cases.project.project_id"
         payload = {
             "filters": {
@@ -102,6 +182,7 @@ class ImageDownloader:
             "size": 20000,  # large enough for all WSIs
         }
 
+        # Request
         r = requests.post(self.GDC_FILES_ENDPOINT, json=payload)
         r.raise_for_status()
 
@@ -117,8 +198,16 @@ class ImageDownloader:
 
     def _query_svs_for_case(self, case_id):
         """
-        Return a list of (file_id, file_name) for SVS slides of a TCGA case.
+        Get SVS files for a given TCGA case.
+
+        Args:
+            case_id (str): TCGA case ID.
+
+        Returns:
+            list[tuple[str, str]]: List of (file_id, file_name).
         """
+
+        # Metadata
         fields = "file_id,file_name,cases.submitter_id"
         payload = {
             "filters": {
@@ -152,6 +241,7 @@ class ImageDownloader:
             "size": 100,
         }
 
+        # Request
         r = requests.post(self.GDC_FILES_ENDPOINT, json=payload)
         r.raise_for_status()
 
@@ -159,6 +249,14 @@ class ImageDownloader:
         return [(h["file_id"], h["file_name"]) for h in hits]
 
     def _download_file(self, file_id, out_path):
+        """
+        Download a file from GDC.
+
+        Args:
+            file_id (str): GDC file UUID.
+            out_path (str): Destination file path.
+        """
+
         url = f"{self.GDC_DATA_ENDPOINT}/{file_id}"
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
@@ -168,14 +266,23 @@ class ImageDownloader:
                         f.write(chunk)
 
     # ---------------------------------------------------------
-    # Calculate Image Proportions
+    # Image Proportions and Counts Manipulation
     # ---------------------------------------------------------
+
     def calc_img_proportions(self):
+        """
+        Compute sampling proportions based on available cases.
+
+        Returns:
+            dict[str, float]: Project proportions.
+        """
+
         case_counts = {}
         all_cases = set()
 
         print("Querying TCGA projects...\n")
 
+        # Iterate projects and count cases
         for proj in self.PROJECTS:
             cases = self._query_tcga_cases(proj)
             case_counts[proj] = len(cases)
@@ -201,11 +308,17 @@ class ImageDownloader:
         self.proportions = proportions
         return proportions
 
-    # ---------------------------------------------------------
-    # Query Images
-    # ---------------------------------------------------------
     def calc_img_counts(self):
+        """
+        Calculate absolute image counts by precomputed proportions.
+
+        Returns:
+            dict[str, int]: Number of images per project.
+        """
+
         image_counts = {}
+
+        # Iterate projects and compute counts
         for i in self.proportions:
             q = int(
                 (
@@ -219,14 +332,23 @@ class ImageDownloader:
         return image_counts
 
     # ---------------------------------------------------------
-    # Fetch Images
+    # Fetch and Download Images
     # ---------------------------------------------------------
+
     def fetch_images(self, output_json=None):
+        """
+        Select cases to download per project (exluding existing cases).
+
+        Args:
+            output_json (str, optional): Save selected cases to JSON.
+        """
+
         existing = self._existing_cases_on_disk()
         print(f"Existing local cases: {len(existing)}")
 
         selected = {}
 
+        # Iterate projects and select cases
         for project, target in self.image_counts.items():
             print(f"\nQuerying {project} …")
             tcga_cases = self._query_tcga_cases(project)
@@ -234,6 +356,7 @@ class ImageDownloader:
             # Remove cases already on disk
             candidates = [c for c in tcga_cases if c not in existing]
 
+            # Warn if not enough candidates
             if len(candidates) < target:
                 print(
                     f"  WARNING: requested {target}, "
@@ -260,10 +383,12 @@ class ImageDownloader:
 
         print(f"\nDONE. Selected {len(selected)} cases in total.")
 
-    # ---------------------------------------------------------
-    # Download Images
-    # ---------------------------------------------------------
     def download_images(self):
+        """
+        Download one SVS slide per selected case.
+
+        Skips existing files and deletes partial files on failure.
+        """
         os.makedirs(self.DATA_DIR, exist_ok=True)
 
         total = len(self.fetched_images)
@@ -272,6 +397,8 @@ class ImageDownloader:
         missing = 0
 
         t0 = time.time()
+
+        # Iterate selected cases and download
         for i, (case_id, project) in enumerate(self.fetched_images.items(), start=1):
             category = project.replace("TCGA-", "")
             out_name = f"{case_id}-{category}{FILE_EXT}"
@@ -286,6 +413,7 @@ class ImageDownloader:
             # Query TCGA
             slides = self._query_svs_for_case(case_id)
 
+            # Handle missing cases
             if not slides:
                 missing += 1
                 print(f"[MISSING] No SVS found for {case_id} " f"({i}/{total})")
@@ -294,6 +422,7 @@ class ImageDownloader:
             # Deterministic choice: first slide
             file_id, file_name = slides[0]
 
+            # Download file
             print(f"[DOWNLOADING] {case_id} → {out_name} " f"({i}/{total})")
             try:
                 self._download_file(file_id, out_path)
@@ -314,17 +443,31 @@ class ImageDownloader:
         print(f"  Total      : {total}")
 
     # ---------------------------------------------------------
-    # Run Whole Pipeline
+    # Run Pipeline
     # ---------------------------------------------------------
+
     def run(self):
+        """
+        Execute full pipeline:
+            proportions → counts → selection → download
+        """
+
         if self.fetched_images is None:
             if self.image_counts is None:
                 if self.proportions is None:
+                    # Step 1: Compute proportions
                     self.calc_img_proportions()
+                # Step 2: Compute counts
                 self.calc_img_counts()
+            # Step 3: Fetch/select cases
             self.fetch_images(output_json=self.fetched_images_output_json)
+        # Step 4: Download images
         self.download_images()
 
+
+# =========================================================
+# Main
+# =========================================================
 
 if __name__ == "__main__":
     downloader = ImageDownloader(
@@ -332,4 +475,4 @@ if __name__ == "__main__":
         PROJECTS=NORMAL_PROJECTS,
         fetched_images_output_json="tcga_cases_to_fetch.json",
     )
-    #downloader.run()
+    downloader.run()

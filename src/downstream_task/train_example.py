@@ -10,6 +10,7 @@ Step 2 (this script):
 
 import sys
 from pathlib import Path
+
 repo_root = str(Path(__file__).resolve().parents[2])
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
@@ -24,7 +25,7 @@ from src.downstream_task.wsi_classification_plip import TransformerMIL
 # ─────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────
-EMBEDDINGS_DIR = "/Volumes/Xbox_HD/Data/downstream_data/humbe"   # .pt files from extract_method_embeddings.py
+EMBEDDINGS_DIR = "/Volumes/Xbox_HD/Data/downstream_data/humbe"  # .pt files from extract_method_embeddings.py
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 # 5 WSIs: (case_id, integer_label)
@@ -50,7 +51,7 @@ for case_id, label in CASES:
         print(f"[SKIP] {pt_path} not found")
         continue
     data = torch.load(pt_path, map_location="cpu")
-    embeddings = data["embeddings"]          # Tensor[N, 512]  — N differs per WSI
+    embeddings = data["embeddings"]  # Tensor[N, 512]  — N differs per WSI
     dataset.append((embeddings, label, case_id))
     print(f"  Loaded {case_id}: {embeddings.shape[0]} patches, label={label}")
 
@@ -82,17 +83,19 @@ for epoch in range(EPOCHS):
     total_loss = 0.0
 
     for embeddings, label, case_id in dataset:
-        X = embeddings.to(DEVICE)               # [N, 512]   N varies per WSI
-        y = torch.tensor([label], device=DEVICE) # [1]
+        X = embeddings.to(DEVICE)  # [N, 512]   N varies per WSI
+        y = torch.tensor([label], device=DEVICE)  # [1]
 
         optimizer.zero_grad()
-        logits, _ = model(X)                     # logits: [num_classes]
-        loss = criterion(logits.unsqueeze(0), y) # unsqueeze → [1, num_classes]
+        logits, _ = model(X)  # logits: [num_classes]
+        loss = criterion(logits.unsqueeze(0), y)  # unsqueeze → [1, num_classes]
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
 
-        print(f"  Epoch {epoch+1} | {case_id} ({embeddings.shape[0]} patches) | loss={loss.item():.4f}")
+        print(
+            f"  Epoch {epoch+1} | {case_id} ({embeddings.shape[0]} patches) | loss={loss.item():.4f}"
+        )
 
     print(f"Epoch {epoch+1}/{EPOCHS} avg_loss={total_loss/len(dataset):.4f}\n")
 
@@ -108,4 +111,6 @@ with torch.no_grad():
         logits, _ = model(X)
         pred = torch.softmax(logits, dim=-1).argmax().item()
         correct = "✓" if pred == label else "✗"
-        print(f"  {correct} {case_id}: pred={label_names[pred]}  true={label_names[label]}")
+        print(
+            f"  {correct} {case_id}: pred={label_names[pred]}  true={label_names[label]}"
+        )

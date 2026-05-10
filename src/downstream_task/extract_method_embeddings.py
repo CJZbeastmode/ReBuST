@@ -57,7 +57,15 @@ from tqdm import tqdm
 from src.utils.wsi import WSI
 from src.utils.embedder import Embedder
 
-METHODS = ["humbe_a2c", "humbe", "a2c", "greedy", "supervised_regressor", "supervised_zoom", "full"]
+METHODS = [
+    "humbe_a2c",
+    "humbe",
+    "a2c",
+    "greedy",
+    "supervised_regressor",
+    "supervised_zoom",
+    "full",
+]
 DEFAULT_MODELS = {
     "humbe_a2c": "data/models/rl/a2c_lvl4/a2c_lvl4_final.pt",
     "a2c": "data/models/rl/a2c_lvl4/a2c_lvl4_final.pt",
@@ -65,11 +73,16 @@ DEFAULT_MODELS = {
     "supervised_zoom": "data/models/supervised/zoom_classifier_final.pt",
 }
 
-METHODS_REQUIRING_MODEL = {"a2c", "humbe_a2c", "supervised_regressor", "supervised_zoom"}
+METHODS_REQUIRING_MODEL = {
+    "a2c",
+    "humbe_a2c",
+    "supervised_regressor",
+    "supervised_zoom",
+}
 
 
 DEFAULT_IMAGES_DIR = "/Volumes/Xbox_HD/Data/med_img"
-DEFAULT_OUT_ROOT   = "/Volumes/Xbox_HD/Data/downstream_data"
+DEFAULT_OUT_ROOT = "/Volumes/Xbox_HD/Data/downstream_data"
 
 
 def parse_label_from_stem(stem: str) -> str:
@@ -96,6 +109,7 @@ def discover_cases(images_dir: str) -> dict:
 # Device helper
 # ============================================================
 
+
 def _get_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
@@ -110,6 +124,7 @@ def _get_device() -> torch.device:
 # ============================================================
 # Shared embedding extractor
 # ============================================================
+
 
 def extract_embeddings_for_patches(
     wsi: WSI,
@@ -139,16 +154,13 @@ def extract_embeddings_for_patches(
 # Each returns a list of (level, x, y) tuples.
 # ============================================================
 
+
 def select_full(wsi: WSI, **kwargs) -> list:
     """All patches at the coarsest level (max_level)."""
     lvl = wsi.max_level
     w, h = wsi.levels_info[lvl]["size"]
     ps = wsi.patch_size
-    return [
-        (lvl, x, y)
-        for y in range(0, h, ps)
-        for x in range(0, w, ps)
-    ]
+    return [(lvl, x, y) for y in range(0, h, ps) for x in range(0, w, ps)]
 
 
 def select_humbe(
@@ -162,7 +174,9 @@ def select_humbe(
     from src.utils.patch_scores import PATCH_SCORE_MODULES
 
     score_module = PATCH_SCORE_MODULES[score_key]()
-    wsi = humbe(wsi, score_module=score_module, budget_ratio=budget_ratio, verbose=False)
+    wsi = humbe(
+        wsi, score_module=score_module, budget_ratio=budget_ratio, verbose=False
+    )
     return list(wsi.active_patches.keys())  # list of (lvl, x, y)
 
 
@@ -180,7 +194,9 @@ def select_humbe_a2c(
     from src.inference.a2c.infer_rl_a2c import infer_wsi_a2c
 
     score_module = PATCH_SCORE_MODULES[score_key]()
-    wsi = humbe(wsi, score_module=score_module, budget_ratio=budget_ratio, verbose=False)
+    wsi = humbe(
+        wsi, score_module=score_module, budget_ratio=budget_ratio, verbose=False
+    )
     wsi = infer_wsi_a2c(
         wsi, model_path=model_path, deterministic=deterministic, verbose=False
     )
@@ -212,7 +228,7 @@ def select_greedy(
     **kwargs,
 ) -> list:
     """Greedy information-gain patch selection."""
-    from src.inference.greedy_infer import greedy_infer_zoom
+    from src.inference.greedy.greedy_infer_score_demo import greedy_infer_zoom
     from src.utils.dynamic_patch_env import DynamicPatchEnv
 
     env = DynamicPatchEnv(wsi, patch_score="text_align_score")
@@ -232,6 +248,7 @@ def select_greedy(
 def _load_supervised_model(model_path: str, device: torch.device):
     """Load a supervised model checkpoint (plain state-dict or wrapped)."""
     from src.training.supervised.score_regressor import ScoreRegressor
+
     model = ScoreRegressor(state_dim=515, hidden=256)
     ckpt = torch.load(model_path, map_location=device)
     if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
@@ -318,6 +335,7 @@ SELECTORS = {
 # Main
 # ============================================================
 
+
 def _run_one_method(args, method: str) -> None:
     """Extract embeddings for a single *method* and write .pt files."""
     if method not in SELECTORS:
@@ -325,9 +343,7 @@ def _run_one_method(args, method: str) -> None:
 
     model_path = DEFAULT_MODELS.get(method)
     if method in METHODS_REQUIRING_MODEL and not model_path:
-        raise ValueError(
-            f"No default model path configured for method '{method}'."
-        )
+        raise ValueError(f"No default model path configured for method '{method}'.")
     if model_path and not os.path.isfile(model_path):
         raise FileNotFoundError(
             f"Default checkpoint for method '{method}' not found: {model_path}"
@@ -368,9 +384,7 @@ def _run_one_method(args, method: str) -> None:
     selector_fn = SELECTORS[method]
 
     case_ids = sorted(labels.keys())
-    print(
-        f"[EXTRACT] method={method}  cases={len(case_ids)}  out_dir={out_dir}"
-    )
+    print(f"[EXTRACT] method={method}  cases={len(case_ids)}  out_dir={out_dir}")
 
     success, skipped, failed = 0, 0, 0
 
@@ -395,7 +409,7 @@ def _run_one_method(args, method: str) -> None:
             label = labels[case_id]
             torch.save(
                 {
-                    "embeddings": embeddings,   # [N, 512]
+                    "embeddings": embeddings,  # [N, 512]
                     "patch_count": len(coords),
                     "method": method,
                     "case_id": case_id,
@@ -403,13 +417,12 @@ def _run_one_method(args, method: str) -> None:
                 },
                 out_path,
             )
-            print(
-                f"  [SAVED] {case_id}: {len(coords)} patches → {out_path}"
-            )
+            print(f"  [SAVED] {case_id}: {len(coords)} patches → {out_path}")
             success += 1
 
         except Exception as e:
             import traceback
+
             print(f"  [FAIL] {case_id}: {e}")
             traceback.print_exc()
             failed += 1
@@ -443,24 +456,22 @@ def _consolidate(pt_dir: str, method: str, out_root: str) -> None:
     all_embeddings, all_labels, all_case_ids = [], [], []
     for fname in tqdm(pt_files, desc=f"consolidate/{method}"):
         data = torch.load(os.path.join(pt_dir, fname), map_location="cpu")
-        all_embeddings.append(data["embeddings"])   # Tensor [N, 512]
+        all_embeddings.append(data["embeddings"])  # Tensor [N, 512]
         all_labels.append(data["label"])
         all_case_ids.append(data["case_id"])
 
     out_path = os.path.join(out_root, f"{method}_dataset.pt")
     torch.save(
         {
-            "embeddings": all_embeddings,   # list of variable-length tensors
-            "labels":     all_labels,
-            "case_ids":   all_case_ids,
-            "method":     method,
-            "n_wsi":      len(all_embeddings),
+            "embeddings": all_embeddings,  # list of variable-length tensors
+            "labels": all_labels,
+            "case_ids": all_case_ids,
+            "method": method,
+            "n_wsi": len(all_embeddings),
         },
         out_path,
     )
-    print(
-        f"[CONSOLIDATE] {method}: {len(all_embeddings)} WSIs → {out_path}"
-    )
+    print(f"[CONSOLIDATE] {method}: {len(all_embeddings)} WSIs → {out_path}")
 
 
 def main(args):
@@ -484,43 +495,56 @@ if __name__ == "__main__":
     )
     method_group = p.add_mutually_exclusive_group()
     method_group.add_argument(
-        "--method", choices=METHODS, default=None,
+        "--method",
+        choices=METHODS,
+        default=None,
         help="Single patch selection method to run",
     )
     method_group.add_argument(
-        "--all-methods", action="store_true",
+        "--all-methods",
+        action="store_true",
         help="Run all 6 methods sequentially (ignores --method)",
     )
     p.add_argument(
-        "--images-dir", default=DEFAULT_IMAGES_DIR,
+        "--images-dir",
+        default=DEFAULT_IMAGES_DIR,
         help=f"Directory containing .svs files (default: {DEFAULT_IMAGES_DIR})",
     )
     p.add_argument(
-        "--labels-json", default=None,
+        "--labels-json",
+        default=None,
         help="Optional JSON mapping case_id → label (auto-parsed from filenames if omitted)",
     )
     p.add_argument(
-        "--out-dir", default=None,
+        "--out-dir",
+        default=None,
         help=f"Output root directory (default: {DEFAULT_OUT_ROOT}/{{method}})",
     )
     p.add_argument(
-        "--budget", type=float, default=0.8,
+        "--budget",
+        type=float,
+        default=0.8,
         help="HUMBE budget ratio (default: 0.8)",
     )
     p.add_argument(
-        "--max-depth", type=int, default=6,
+        "--max-depth",
+        type=int,
+        default=6,
         help="Maximum zoom depth for greedy / a2c (default: 6)",
     )
     p.add_argument(
-        "--score", default="text_align_score",
+        "--score",
+        default="text_align_score",
         help="Patch score module key (default: text_align_score)",
     )
     p.add_argument(
-        "--stochastic", action="store_true",
+        "--stochastic",
+        action="store_true",
         help="Use stochastic policy sampling (default: deterministic)",
     )
     p.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Overwrite existing .pt files",
     )
     args = p.parse_args()
