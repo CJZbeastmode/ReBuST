@@ -7,7 +7,7 @@ from collections import defaultdict
 # ==========================
 # CONFIG (EDIT HERE)
 # ==========================
-DATA_DIR = "/Volumes/Xbox_HD/data/med_img/train"
+DATA_DIR = "/Volumes/Xbox_HD/data/med_img/val"
 FILE_EXT = ".svs"
 OUTPUT_JSON = "image_counts_per_category.json"
 # ==========================
