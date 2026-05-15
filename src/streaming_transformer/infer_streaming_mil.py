@@ -16,7 +16,7 @@ if repo_root not in sys.path:
 
 from src.streaming_transformer.model import StreamingMILTransformer
 
-
+# Helper functions for loading model, data, and computing metrics
 def _default_checkpoint_path() -> str:
     return os.path.join(
         repo_root,
@@ -28,6 +28,7 @@ def _default_checkpoint_path() -> str:
     )
 
 
+# Transform the loaded .pt file into tensors
 def _to_tensor(value: object, dim: int) -> torch.Tensor | None:
     if value is None:
         return None
@@ -44,6 +45,7 @@ def _to_tensor(value: object, dim: int) -> torch.Tensor | None:
     return value
 
 
+# Load the model checkpoint and remap state dict keys
 def _load_embeddings_and_coords(
     pt_path: str,
 ) -> Tuple[torch.Tensor, torch.Tensor, str | None]:
@@ -71,6 +73,7 @@ def _load_embeddings_and_coords(
     return embeddings, coords, label
 
 
+# Load the model checkpoint and remap state dict keys
 def load_model(
     checkpoint_path: str, device: torch.device
 ) -> Tuple[StreamingMILTransformer, Dict[str, int]]:
@@ -82,7 +85,7 @@ def load_model(
     remapped_state = {}
     for key, value in state_dict.items():
         if key.startswith("local_layers."):
-            new_key = "local_encoder.layers." + key[len("local_layers."):]
+            new_key = "local_encoder.layers." + key[len("local_layers.") :]
             remapped_state[new_key] = value
         else:
             remapped_state[key] = value
@@ -101,6 +104,7 @@ def load_model(
     return model, label_map
 
 
+# Prediction for a single WSI given its patch embeddings and coordinates
 def predict_one(
     model: StreamingMILTransformer,
     embeddings: torch.Tensor,
@@ -114,6 +118,7 @@ def predict_one(
     return {"pred": pred, "probs": probs.tolist()}
 
 
+# Compute confusion matrix and classification metrics
 def _confusion_matrix(
     labels: np.ndarray, preds: np.ndarray, num_classes: int
 ) -> np.ndarray:
@@ -124,6 +129,7 @@ def _confusion_matrix(
     return mat
 
 
+# Compute classification metrics from labels, predictions, and probabilities
 def _classification_metrics(
     labels: np.ndarray, preds: np.ndarray, probs: np.ndarray, num_classes: int
 ) -> Dict[str, object]:
@@ -137,7 +143,9 @@ def _classification_metrics(
             "per_class_f1": [float("nan")] * num_classes,
             "per_class_accuracy_summary": [],
             "support": [0] * num_classes,
-            "confusion_matrix": np.zeros((num_classes, num_classes), dtype=np.int64).tolist(),
+            "confusion_matrix": np.zeros(
+                (num_classes, num_classes), dtype=np.int64
+            ).tolist(),
         }
 
     conf = _confusion_matrix(labels, preds, num_classes)
@@ -208,6 +216,7 @@ def _classification_metrics(
     }
 
 
+# Bootstrap resampling to estimate metric standard deviations
 def _bootstrap_metric_std(
     labels: np.ndarray,
     preds: np.ndarray,
@@ -250,7 +259,9 @@ def _bootstrap_metric_std(
     return out
 
 
+# Main entry point for inference, loading model, data, and computing metrics
 def main(args):
+    # Set up
     device = torch.device(args.device)
     if not os.path.exists(args.checkpoint):
         raise FileNotFoundError(
@@ -263,12 +274,14 @@ def main(args):
     if not args.embeddings_dir:
         raise ValueError("Provide --embeddings-dir")
 
+    # Inference loop over embedding files
     predictions = []
     true_labels = []
     pred_labels = []
     pred_probs = []
     skipped_missing_label = 0
 
+    # Iterate over .pt files in the embeddings directory, predict, and collect results
     pt_files = sorted([f for f in os.listdir(args.embeddings_dir) if f.endswith(".pt")])
     for fname in pt_files:
         if fname.startswith(".") or fname.startswith("._"):
@@ -276,6 +289,7 @@ def main(args):
         case_id = os.path.splitext(fname)[0]
         pt_path = os.path.join(args.embeddings_dir, fname)
         embs, coords, label_name = _load_embeddings_and_coords(pt_path)
+        # Run prediction for this WSI and collect results
         out = predict_one(model, embs, coords, device)
         predictions.append(
             {
@@ -293,6 +307,7 @@ def main(args):
         pred_labels.append(int(out["pred"]))
         pred_probs.append(np.asarray(out["probs"], dtype=np.float32))
 
+    # Compute metrics
     labels_np = np.array(true_labels, dtype=np.int64)
     preds_np = np.array(pred_labels, dtype=np.int64)
     probs_np = (
@@ -315,7 +330,9 @@ def main(args):
         class_index = int(row.get("class_index", -1))
         row["class_label"] = int_to_label.get(class_index, str(class_index))
 
-    print(f"[DATA] total={len(predictions)} labeled={labels_np.size} skipped={skipped_missing_label}")
+    print(
+        f"[DATA] total={len(predictions)} labeled={labels_np.size} skipped={skipped_missing_label}"
+    )
     print(
         "[METRICS] "
         f"acc={metrics['accuracy']:.4f}±{metrics['accuracy_std']:.4f} "
@@ -362,7 +379,9 @@ def parse_args():
         help="Directory of WSI embedding .pt files",
     )
     parser.add_argument(
-        "--out-json", default="data/benchmark/streaming_transformer.json", help="Optional output predictions json"
+        "--out-json",
+        default="data/benchmark/streaming_transformer.json",
+        help="Optional output predictions json",
     )
     parser.add_argument("--output", dest="output", action="store_true", default=True)
     parser.add_argument("--no-output", dest="output", action="store_false")

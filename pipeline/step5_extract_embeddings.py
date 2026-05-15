@@ -19,7 +19,9 @@ repo_root = str(Path(__file__).resolve().parents[1])
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
-from archive.streaming_transformer_archive.streaming_transformer_v1.data import WSIEmbeddingDataset
+from archive.streaming_transformer_archive.streaming_transformer_v1.data import (
+    WSIEmbeddingDataset,
+)
 
 
 def discover_pt_files(folder: str) -> list[str]:
@@ -46,7 +48,9 @@ def run_split(
         print(f"[WARN] No .pt files found in {input_dir}")
         return
 
-    helper = WSIEmbeddingDataset(items=[], embeddings_dir=input_dir, images_dir=images_dir)
+    helper = WSIEmbeddingDataset(
+        items=[], embeddings_dir=input_dir, images_dir=images_dir
+    )
     success, skipped, failed = 0, 0, 0
 
     for fname in tqdm(pt_files, desc=f"step5/{Path(input_dir).name}"):

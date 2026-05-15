@@ -1,4 +1,6 @@
-"""Module for train streaming mil."""
+"""
+Module for training a streaming MIL transformer with per-WSI CLS token streaming.
+"""
 
 import argparse
 import json
@@ -26,13 +28,13 @@ from data import (
 from engine import evaluate, train_one_epoch
 from model import StreamingMILTransformer
 
-
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-
+# Helper functions for monitoring and reporting
 def _metrics_brief(metrics: Dict) -> str:
     return (
         f"loss={metrics['loss']:.4f} "
@@ -43,14 +45,22 @@ def _metrics_brief(metrics: Dict) -> str:
         f"auc={metrics['auc']:.4f}"
     )
 
-
 def _resolve_monitor_mode(metric_name: str, mode: str) -> str:
+    """
+    Resolve monitor mode based on metric name and user-specified mode.
+    
+    Args:
+        metric_name: Name of the metric being monitored (e.g., "loss", "accuracy").
+        mode: User-specified mode ("auto", "min", "max").
+
+    Returns:
+        Resolved mode ("min" or "max") for the monitor metric.
+    """
     if mode in {"min", "max"}:
         return mode
     if metric_name == "loss":
         return "min"
     return "max"
-
 
 def _is_improved(
     current: float,
@@ -58,6 +68,18 @@ def _is_improved(
     mode: str,
     min_delta: float,
 ) -> bool:
+    """
+    Check if the current metric value is an improvement over the best value.
+
+    Args:
+        current: Current metric value.
+        best: Best metric value seen so far (or None if no best yet).
+        mode: "min" if lower is better, "max" if higher is better.
+        min_delta: Minimum change required to qualify as an improvement.
+    
+    Returns:
+        True if current is an improvement over best by at least min_delta, False otherwise.
+    """
     if not math.isfinite(current):
         return False
     if best is None:
@@ -68,20 +90,29 @@ def _is_improved(
 
 
 def _remap_state_dict(state_dict: dict) -> dict:
+    """
+    Remap state dict keys from old "local_layers." prefix to new "local_encoder.layers." prefix.
+
+    Args:
+        state_dict: Original state dict with potential old key prefixes.
+
+    Returns:
+        New state dict with keys remapped to match current model definition.
+    """
     remapped = {}
     for key, value in state_dict.items():
         if key.startswith("local_layers."):
-            new_key = "local_encoder.layers." + key[len("local_layers."):]
+            new_key = "local_encoder.layers." + key[len("local_layers.") :]
             remapped[new_key] = value
         else:
             remapped[key] = value
     return remapped
 
-
+# Invert label map for easy lookup of label names from indices
 def _invert_label_map(label_map: Dict[str, int]) -> Dict[int, str]:
     return {idx: name for name, idx in label_map.items()}
 
-
+# Summarization functions for reporting confusions, rare classes, and prediction distribution
 def _summarize_confusions(
     conf_mat: np.ndarray,
     idx_to_label: Dict[int, str],
@@ -117,7 +148,9 @@ def _summarize_rare_classes(
     val_support = val_conf_mat.sum(axis=1)
     diag = np.diag(val_conf_mat)
     parts = []
-    for i in sorted(rare_idx, key=lambda k: (train_class_counts[k], idx_to_label.get(k, ""))):
+    for i in sorted(
+        rare_idx, key=lambda k: (train_class_counts[k], idx_to_label.get(k, ""))
+    ):
         support = int(val_support[i])
         recall = float(diag[i] / support) if support > 0 else float("nan")
         f1 = float(val_per_class_f1[i]) if i < len(val_per_class_f1) else float("nan")
@@ -139,16 +172,25 @@ def _summarize_pred_distribution(
     parts = []
     for idx in order[:top_k]:
         label_idx = int(unique[idx])
-        parts.append(f"{idx_to_label.get(label_idx, str(label_idx))}:{int(counts[idx])}")
+        parts.append(
+            f"{idx_to_label.get(label_idx, str(label_idx))}:{int(counts[idx])}"
+        )
     return ", ".join(parts)
 
 
 def train(args) -> None:
-    set_seed(args.seed)
+    """
+    Main training loop for streaming MIL transformer.
 
+    Args:
+        args: Namespace of training arguments parsed from CLI.
+    """
+    # Setup
+    set_seed(args.seed)
     device = torch.device(args.device)
     os.makedirs(args.out_dir, exist_ok=True)
 
+    # ---------------- Load data ----------------
     train_items, label_map = build_items_from_pt_labels(args.train_embeddings_dir)
     val_items = build_items_from_pt_labels_with_map(
         args.val_embeddings_dir,

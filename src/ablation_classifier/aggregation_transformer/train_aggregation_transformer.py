@@ -29,12 +29,14 @@ from engine import evaluate, train_one_epoch
 from model import AggregationTransformer, PureMIL
 
 
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
 
+# Helper functions for monitoring and reporting
 def _metrics_brief(metrics: Dict) -> str:
     return (
         f"loss={metrics['loss']:.4f} "
@@ -46,6 +48,7 @@ def _metrics_brief(metrics: Dict) -> str:
     )
 
 
+# Resolve monitor mode from metric name when mode is 'auto'
 def _resolve_monitor_mode(metric_name: str, mode: str) -> str:
     if mode in {"min", "max"}:
         return mode
@@ -54,7 +57,10 @@ def _resolve_monitor_mode(metric_name: str, mode: str) -> str:
     return "max"
 
 
-def _is_improved(current: float, best: float | None, mode: str, min_delta: float) -> bool:
+# Check if current score is strictly better than best within min_delta tolerance
+def _is_improved(
+    current: float, best: float | None, mode: str, min_delta: float
+) -> bool:
     if not math.isfinite(current):
         return False
     if best is None:
@@ -73,6 +79,7 @@ def train(args) -> None:
     pure = method in {"ABMIL_PURE", "CLAM_PURE"}
     pooling_type = "clam" if method in {"CLAM", "CLAM_PURE"} else "abmil"
 
+    # ---------------- Load data ----------------
     train_items, label_map = build_items_from_pt_labels(args.train_embeddings_dir)
     val_items = build_items_from_pt_labels_with_map(
         args.val_embeddings_dir,
@@ -107,15 +114,24 @@ def train(args) -> None:
         sample_seed=args.seed,
     )
 
-    # WeightedRandomSampler — same as ReBuST; plain CE handles the rest via logit adjustment
+    # === Imbalance: WeightedRandomSampler + logit adjustment ===
     train_labels = [item.label for item in train_items]
-    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(np.float32)
+    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(
+        np.float32
+    )
     class_counts[class_counts == 0.0] = 1.0
-    class_weights = (len(train_labels) / (len(label_map) * class_counts)).astype(np.float32)
-    sample_weights = torch.tensor([class_weights[lbl] for lbl in train_labels], dtype=torch.float32)
-    train_sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+    class_weights = (len(train_labels) / (len(label_map) * class_counts)).astype(
+        np.float32
+    )
+    sample_weights = torch.tensor(
+        [class_weights[lbl] for lbl in train_labels], dtype=torch.float32
+    )
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights, num_samples=len(sample_weights), replacement=True
+    )
     print(f"[CLASS WEIGHTS] {class_weights.tolist()}")
 
+    # ---------------- Data & loaders ----------------
     train_loader = DataLoader(
         train_ds,
         batch_size=args.wsi_batch_size,
@@ -139,6 +155,7 @@ def train(args) -> None:
         collate_fn=collate_wsi_batch,
     )
 
+    # ---------------- Model ----------------
     if pure:
         model = PureMIL(
             embed_dim=args.embed_dim,
@@ -165,9 +182,14 @@ def train(args) -> None:
             wikg_temperature=args.wikg_temperature,
         ).to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # ---------------- Optimization ----------------
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
 
-    model.set_logit_adjustment(torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau)
+    model.set_logit_adjustment(
+        torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau
+    )
     print(f"[LOGIT ADJUST] tau={args.logit_adjust_tau}")
 
     criterion = nn.CrossEntropyLoss()
@@ -194,6 +216,7 @@ def train(args) -> None:
     epochs_no_improve = 0
     history = []
 
+    # ---------------- Training loop ----------------
     for epoch in range(1, args.epochs + 1):
         print(f"\n[EPOCH {epoch:03d}] Starting epoch {epoch}...")
         epoch_start = time.perf_counter()
@@ -293,7 +316,10 @@ def train(args) -> None:
         if math.isfinite(current_val_score):
             scheduler.step(current_val_score)
 
-        if args.early_stopping_patience > 0 and epochs_no_improve >= args.early_stopping_patience:
+        if (
+            args.early_stopping_patience > 0
+            and epochs_no_improve >= args.early_stopping_patience
+        ):
             print(
                 f"[EARLY STOP] No val_{args.monitor_metric} improvement for {epochs_no_improve} epochs."
             )
@@ -327,6 +353,7 @@ def train(args) -> None:
             best_path,
         )
 
+    # ---------------- Test & report ----------------
     ckpt = torch.load(best_path, map_location=device)
     model.load_state_dict(ckpt["model_state_dict"])
     test_metrics = evaluate(model, test_loader, criterion, device)
@@ -366,11 +393,24 @@ def train(args) -> None:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Train aggregation transformer (ABMIL/CLAM pooling)")
-    p.add_argument("--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/train")
-    p.add_argument("--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/val")
-    p.add_argument("--test-embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/test")
-    p.add_argument("--out-dir", default="data/models/ablation_classifier/aggregation_transformer")
+    p = argparse.ArgumentParser(
+        description="Train aggregation transformer (ABMIL/CLAM pooling)"
+    )
+    p.add_argument(
+        "--train-embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/train",
+    )
+    p.add_argument(
+        "--val-embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/val",
+    )
+    p.add_argument(
+        "--test-embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/test",
+    )
+    p.add_argument(
+        "--out-dir", default="data/models/ablation_classifier/aggregation_transformer"
+    )
 
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--wsi-batch-size", type=int, default=8)
@@ -409,10 +449,18 @@ def parse_args():
         default="uniform",
     )
 
-    p.add_argument("--logit-adjust-tau", type=float, default=1.0,
-                   help="Logit adjustment tau for class prior correction (0 = disabled)")
+    p.add_argument(
+        "--logit-adjust-tau",
+        type=float,
+        default=1.0,
+        help="Logit adjustment tau for class prior correction (0 = disabled)",
+    )
 
-    p.add_argument("--monitor-metric", choices=["loss", "accuracy", "balanced_accuracy", "macro_f1", "f1", "auc"], default="macro_f1")
+    p.add_argument(
+        "--monitor-metric",
+        choices=["loss", "accuracy", "balanced_accuracy", "macro_f1", "f1", "auc"],
+        default="macro_f1",
+    )
     p.add_argument("--monitor-mode", choices=["auto", "min", "max"], default="auto")
     p.add_argument("--early-stopping-patience", type=int, default=8)
     p.add_argument("--early-stopping-min-delta", type=float, default=1e-4)

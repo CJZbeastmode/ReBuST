@@ -20,8 +20,8 @@ python src/downstream_task/benchmark_classification.py \\
 
 Programmatic API
 ----------------
->>> from src.downstream_task.benchmark_classification import run_kfold_benchmark
->>> results = run_kfold_benchmark("data/extracted_embeddings/humbe_a2c",
+from src.downstream_task.benchmark_classification import run_kfold_benchmark
+results = run_kfold_benchmark("data/extracted_embeddings/humbe_a2c",
 ...                               "data/labels_main.json", k=5, epochs=20)
 """
 
@@ -45,11 +45,10 @@ from tqdm import tqdm
 
 from src.downstream_task.wsi_classification_plip import TransformerMIL
 
-# sklearn is required for StratifiedKFold and metrics.
 try:
     from sklearn.model_selection import StratifiedKFold
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:
     raise ImportError(
         "scikit-learn is required for benchmarking. "
         "Install it with: pip install scikit-learn"

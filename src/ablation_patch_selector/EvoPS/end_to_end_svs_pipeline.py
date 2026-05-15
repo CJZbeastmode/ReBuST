@@ -28,6 +28,7 @@ from src.ablation_patch_selector.SASHA.data import (
 from src.ablation_patch_selector.SASHA.models import HAFEDClassifier
 
 
+# Safely coerce to float, returning nan on failure
 def _safe_float(v: float) -> float:
     try:
         return float(v)
@@ -35,7 +36,10 @@ def _safe_float(v: float) -> float:
         return float("nan")
 
 
-def _load_hafed(checkpoint_path: str, device: torch.device) -> Tuple[HAFEDClassifier, Dict]:
+# Load HAFED checkpoint and build model
+def _load_hafed(
+    checkpoint_path: str, device: torch.device
+) -> Tuple[HAFEDClassifier, Dict]:
     ckpt = torch.load(checkpoint_path, map_location=device)
     model = HAFEDClassifier(
         embed_dim=int(ckpt.get("embed_dim", 512)),
@@ -48,7 +52,10 @@ def _load_hafed(checkpoint_path: str, device: torch.device) -> Tuple[HAFEDClassi
     return model, ckpt
 
 
-def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+# Compute aggregate classification metrics
+def _compute_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray
+) -> Dict[str, float]:
     metrics = {
         "num_cases": int(len(y_true)),
         "accuracy": _safe_float((y_true == y_pred).mean() if len(y_true) > 0 else 0.0),
@@ -74,9 +81,13 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray)
             f1_score(y_true, y_pred, average="weighted", zero_division=0)
         )
 
-        num_classes = int(y_prob.shape[1]) if y_prob.ndim == 2 and y_prob.size > 0 else 0
+        num_classes = (
+            int(y_prob.shape[1]) if y_prob.ndim == 2 and y_prob.size > 0 else 0
+        )
         if num_classes == 2:
-            metrics["auc_ovr_weighted"] = _safe_float(roc_auc_score(y_true, y_prob[:, 1]))
+            metrics["auc_ovr_weighted"] = _safe_float(
+                roc_auc_score(y_true, y_prob[:, 1])
+            )
         elif num_classes > 2:
             metrics["auc_ovr_weighted"] = _safe_float(
                 roc_auc_score(y_true, y_prob, multi_class="ovr", average="weighted")
@@ -87,6 +98,7 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray)
     return metrics
 
 
+# Map end-to-end args to train_evops args
 def _build_train_args(args: argparse.Namespace) -> argparse.Namespace:
     return argparse.Namespace(
         train_embeddings_dir=args.train_dir,
@@ -111,6 +123,7 @@ def run_end_to_end(args: argparse.Namespace) -> Dict[str, object]:
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # ---------------- Train ----------------
     train_args = _build_train_args(args)
     train_result = train_evops(train_args)
 
@@ -119,6 +132,7 @@ def run_end_to_end(args: argparse.Namespace) -> Dict[str, object]:
 
     hafed, _ = _load_hafed(str(train_result["best_hafed_path"]), device=device)
 
+    # ---------------- Test ----------------
     test_items = build_items_with_label_map(
         args.test_dir,
         label_map=label_map,
@@ -134,7 +148,9 @@ def run_end_to_end(args: argparse.Namespace) -> Dict[str, object]:
         svs_level_mode=args.svs_level_mode,
         svs_embed_backend=args.svs_embed_backend,
     )
-    test_loader = DataLoader(test_ds, batch_size=1, shuffle=False, collate_fn=lambda x: x)
+    test_loader = DataLoader(
+        test_ds, batch_size=1, shuffle=False, collate_fn=lambda x: x
+    )
 
     predictions: List[Dict] = []
     y_true: List[int] = []
@@ -199,12 +215,17 @@ def run_end_to_end(args: argparse.Namespace) -> Dict[str, object]:
 
     y_true_np = np.asarray(y_true, dtype=np.int64)
     y_pred_np = np.asarray(y_pred, dtype=np.int64)
-    y_prob_np = np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    y_prob_np = (
+        np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    )
 
     metrics = _compute_metrics(y_true_np, y_pred_np, y_prob_np)
-    metrics["mean_selected_ratio"] = _safe_float(np.mean(kept_ratios) if kept_ratios else 0.0)
+    metrics["mean_selected_ratio"] = _safe_float(
+        np.mean(kept_ratios) if kept_ratios else 0.0
+    )
     metrics["label_map"] = label_map
 
+    # ---------------- Save & report ----------------
     predictions_path = os.path.join(args.out_dir, "evops_test_predictions.json")
     metrics_path = os.path.join(args.out_dir, "evops_test_metrics.json")
 
@@ -262,7 +283,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-dim", type=int, default=256)
     parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument("--max-patches-per-wsi", type=int, default=0)
-    parser.add_argument("--patch-sample-mode", type=str, default="uniform", choices=["uniform", "head", "random"])
+    parser.add_argument(
+        "--patch-sample-mode",
+        type=str,
+        default="uniform",
+        choices=["uniform", "head", "random"],
+    )
 
     parser.add_argument("--hafed-epochs", type=int, default=10)
     parser.add_argument("--hafed-lr", type=float, default=1e-4)

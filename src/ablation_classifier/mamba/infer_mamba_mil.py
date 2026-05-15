@@ -17,6 +17,7 @@ if repo_root not in sys.path:
 from src.ablation_classifier.mamba.model import MambaMIL
 
 
+# Coerce value to float32 tensor of the requested rank
 def _to_tensor(value: object, dim: int) -> torch.Tensor | None:
     if value is None:
         return None
@@ -33,6 +34,7 @@ def _to_tensor(value: object, dim: int) -> torch.Tensor | None:
     return value
 
 
+# Uniform subsample indices when patch count exceeds cap
 def _sample_indices(n: int, max_patches_per_wsi: int) -> np.ndarray:
     if max_patches_per_wsi <= 0 or n <= max_patches_per_wsi:
         return np.arange(n, dtype=np.int64)
@@ -40,7 +42,10 @@ def _sample_indices(n: int, max_patches_per_wsi: int) -> np.ndarray:
     return np.unique(idx.round().astype(np.int64))
 
 
-def _load_embeddings_and_coords(pt_path: str, max_patches_per_wsi: int) -> Tuple[torch.Tensor, torch.Tensor]:
+# Load embeddings and coords from a .pt file, applying patch cap
+def _load_embeddings_and_coords(
+    pt_path: str, max_patches_per_wsi: int
+) -> Tuple[torch.Tensor, torch.Tensor]:
     loaded = torch.load(pt_path, map_location="cpu")
 
     label = None
@@ -72,7 +77,10 @@ def _load_embeddings_and_coords(pt_path: str, max_patches_per_wsi: int) -> Tuple
     return embeddings, coords, label
 
 
-def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -> np.ndarray:
+# Compute per-class confusion matrix
+def _confusion_matrix(
+    labels: np.ndarray, preds: np.ndarray, num_classes: int
+) -> np.ndarray:
     mat = np.zeros((num_classes, num_classes), dtype=np.int64)
     for label, pred in zip(labels, preds):
         if 0 <= label < num_classes and 0 <= pred < num_classes:
@@ -80,6 +88,7 @@ def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -
     return mat
 
 
+# Compute classification metrics from labels, predictions, and probabilities
 def _classification_metrics(
     labels: np.ndarray, preds: np.ndarray, probs: np.ndarray, num_classes: int
 ) -> Dict[str, object]:
@@ -93,7 +102,9 @@ def _classification_metrics(
             "per_class_f1": [float("nan")] * num_classes,
             "per_class_accuracy_summary": [],
             "support": [0] * num_classes,
-            "confusion_matrix": np.zeros((num_classes, num_classes), dtype=np.int64).tolist(),
+            "confusion_matrix": np.zeros(
+                (num_classes, num_classes), dtype=np.int64
+            ).tolist(),
         }
 
     conf = _confusion_matrix(labels, preds, num_classes)
@@ -164,6 +175,7 @@ def _classification_metrics(
     }
 
 
+# Bootstrap resampling to estimate metric standard deviations
 def _bootstrap_metric_std(
     labels: np.ndarray,
     preds: np.ndarray,
@@ -206,7 +218,10 @@ def _bootstrap_metric_std(
     return out
 
 
-def load_model(checkpoint_path: str, device: torch.device) -> Tuple[MambaMIL, Dict[str, int], Dict]:
+# Load checkpoint and build MambaMIL model
+def load_model(
+    checkpoint_path: str, device: torch.device
+) -> Tuple[MambaMIL, Dict[str, int], Dict]:
     ckpt = torch.load(checkpoint_path, map_location=device)
     cfg = ckpt["config"]
     label_map = ckpt["label_map"]
@@ -228,6 +243,7 @@ def load_model(checkpoint_path: str, device: torch.device) -> Tuple[MambaMIL, Di
     return model, label_map, cfg
 
 
+# Prediction for a single WSI given embeddings and coords
 @torch.no_grad()
 def predict_one(
     model: MambaMIL,
@@ -249,6 +265,7 @@ def predict_one(
 
 
 def main(args):
+    # Set up
     device = torch.device(args.device)
     model, label_map, cfg = load_model(args.checkpoint, device)
     int_to_label = {v: k for k, v in label_map.items()}
@@ -263,9 +280,12 @@ def main(args):
     y_prob: List[np.ndarray] = []
     skipped_missing_label = 0
 
+    # Inference loop
     if args.input_pt:
         case_id = Path(args.input_pt).stem
-        embeddings, coords, label_name = _load_embeddings_and_coords(args.input_pt, max_patches)
+        embeddings, coords, label_name = _load_embeddings_and_coords(
+            args.input_pt, max_patches
+        )
         out = predict_one(model, embeddings, coords, device)
         predictions.append(
             {
@@ -286,13 +306,17 @@ def main(args):
     else:
         if not args.embeddings_dir:
             raise ValueError("Provide --input-pt or --embeddings-dir")
-        pt_files = sorted([f for f in os.listdir(args.embeddings_dir) if f.endswith(".pt")])
+        pt_files = sorted(
+            [f for f in os.listdir(args.embeddings_dir) if f.endswith(".pt")]
+        )
         for fname in pt_files:
             if fname.startswith(".") or fname.startswith("._"):
                 continue
             case_id = os.path.splitext(fname)[0]
             pt_path = os.path.join(args.embeddings_dir, fname)
-            embeddings, coords, label_name = _load_embeddings_and_coords(pt_path, max_patches)
+            embeddings, coords, label_name = _load_embeddings_and_coords(
+                pt_path, max_patches
+            )
             out = predict_one(model, embeddings, coords, device)
             predictions.append(
                 {
@@ -311,6 +335,7 @@ def main(args):
             else:
                 skipped_missing_label += 1
 
+    # Compute metrics
     labels_np = np.asarray(y_true, dtype=np.int64)
     preds_np = np.asarray(y_pred, dtype=np.int64)
     probs_np = (
@@ -333,7 +358,9 @@ def main(args):
         class_index = int(row.get("class_index", -1))
         row["class_label"] = int_to_label.get(class_index, str(class_index))
 
-    print(f"[DATA] total={len(predictions)} labeled={labels_np.size} skipped={skipped_missing_label}")
+    print(
+        f"[DATA] total={len(predictions)} labeled={labels_np.size} skipped={skipped_missing_label}"
+    )
     print(
         "[METRICS] "
         f"acc={metrics['accuracy']:.4f}±{metrics['accuracy_std']:.4f} "
@@ -369,9 +396,15 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Inference for Mamba MIL model")
-    parser.add_argument("--checkpoint", default="data/models/ablation_classifier/mamba/best_mamba_mil.pt")
+    parser.add_argument(
+        "--checkpoint",
+        default="data/models/ablation_classifier/mamba/best_mamba_mil.pt",
+    )
     parser.add_argument("--input-pt", default=None)
-    parser.add_argument("--embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test")
+    parser.add_argument(
+        "--embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test",
+    )
     parser.add_argument("--out-json", default="data/benchmark/mamba_mil.json")
     parser.add_argument("--output", dest="output", action="store_true", default=True)
     parser.add_argument("--no-output", dest="output", action="store_false")

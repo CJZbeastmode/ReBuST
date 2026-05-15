@@ -28,6 +28,7 @@ from src.ablation_patch_selector.SASHA.data import (
 from src.ablation_patch_selector.SASHA.models import HAFEDClassifier
 
 
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -35,6 +36,7 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
+# Evaluate HAFED on a loader, returning loss and accuracy
 def evaluate_hafed(
     model: HAFEDClassifier,
     loader: DataLoader,
@@ -51,7 +53,9 @@ def evaluate_hafed(
                 emb = sample.embeddings.to(device)
                 mask = torch.ones(1, emb.shape[0], dtype=torch.bool, device=device)
                 logits, _, _ = model(emb.unsqueeze(0), mask)
-                target = torch.tensor([sample.label_idx], dtype=torch.long, device=device)
+                target = torch.tensor(
+                    [sample.label_idx], dtype=torch.long, device=device
+                )
                 loss = F.cross_entropy(logits, target)
 
                 total += 1
@@ -68,9 +72,15 @@ def evaluate_hafed(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train EvoPS classifier")
 
-    parser.add_argument("--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/train")
-    parser.add_argument("--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/val")
-    parser.add_argument("--out-dir", default="data/models/ablation_patch_selector/evops")
+    parser.add_argument(
+        "--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/train"
+    )
+    parser.add_argument(
+        "--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/val"
+    )
+    parser.add_argument(
+        "--out-dir", default="data/models/ablation_patch_selector/evops"
+    )
     parser.add_argument(
         "--input-format",
         type=str,
@@ -98,14 +108,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-heads", type=int, default=4)
 
     parser.add_argument("--max-patches-per-wsi", type=int, default=0)
-    parser.add_argument("--patch-sample-mode", type=str, default="uniform", choices=["uniform", "head", "random"])
+    parser.add_argument(
+        "--patch-sample-mode",
+        type=str,
+        default="uniform",
+        choices=["uniform", "head", "random"],
+    )
 
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=1e-4)
 
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--logit-adjust-tau", type=float, default=1.0,
-                        help="Logit adjustment tau (0 = disabled)")
+    parser.add_argument(
+        "--logit-adjust-tau",
+        type=float,
+        default=1.0,
+        help="Logit adjustment tau (0 = disabled)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -116,6 +135,7 @@ def train_evops(args: argparse.Namespace) -> Dict[str, object]:
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # ---------------- Load data ----------------
     train_items, label_map = build_items_and_label_map(
         args.train_embeddings_dir,
         input_format=args.input_format,
@@ -144,15 +164,33 @@ def train_evops(args: argparse.Namespace) -> Dict[str, object]:
         svs_embed_backend=args.svs_embed_backend,
     )
 
+    # === Imbalance: WeightedRandomSampler + logit adjustment ===
     train_labels = [int(item[2]) for item in train_items]
-    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(np.float32)
+    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(
+        np.float32
+    )
     class_counts[class_counts == 0.0] = 1.0
-    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(np.float32)
-    sample_weights = torch.tensor([class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32)
-    train_sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(
+        np.float32
+    )
+    sample_weights = torch.tensor(
+        [class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32
+    )
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights, num_samples=len(sample_weights), replacement=True
+    )
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=False, sampler=train_sampler, collate_fn=collate_samples)
-    val_loader = DataLoader(val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples)
+    # ---------------- Data & loaders ----------------
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        sampler=train_sampler,
+        collate_fn=collate_samples,
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples
+    )
 
     print("[EvoPS] ================================================")
     print(f"[EvoPS] device={device} seed={args.seed} out_dir={args.out_dir}")
@@ -167,20 +205,26 @@ def train_evops(args: argparse.Namespace) -> Dict[str, object]:
     print(f"[EvoPS] label_map={label_map}")
     print("[EvoPS] ================================================")
 
+    # ---------------- Model ----------------
     model = HAFEDClassifier(
         embed_dim=args.embed_dim,
         hidden_dim=args.hidden_dim,
         num_classes=len(label_map),
         num_heads=args.num_heads,
     ).to(device)
-    model.set_logit_adjustment(torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau)
-    print(f"[EvoPS] logit_adjust_tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}")
+    model.set_logit_adjustment(
+        torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau
+    )
+    print(
+        f"[EvoPS] logit_adjust_tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}"
+    )
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
     best_val_acc = -1.0
     best_model_path = os.path.join(args.out_dir, "best_hafed.pt")
 
+    # ---------------- Training loop ----------------
     for epoch in range(1, args.epochs + 1):
         epoch_start = time.perf_counter()
         model.train()
@@ -198,7 +242,9 @@ def train_evops(args: argparse.Namespace) -> Dict[str, object]:
             for sample in batch:
                 emb = sample.embeddings.to(device)
                 mask = torch.ones(1, emb.shape[0], dtype=torch.bool, device=device)
-                target = torch.tensor([sample.label_idx], dtype=torch.long, device=device)
+                target = torch.tensor(
+                    [sample.label_idx], dtype=torch.long, device=device
+                )
 
                 logits, _, _ = model(emb.unsqueeze(0), mask)
                 loss = F.cross_entropy(logits, target)

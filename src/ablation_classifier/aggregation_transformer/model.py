@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# Gated (tanh × sigmoid) attention pooling — CLAM-style
 class CLAMAttentionPooling(nn.Module):
     def __init__(self, model_dim: int, attn_dim: int = 128, dropout: float = 0.1):
         super().__init__()
@@ -31,6 +32,7 @@ class CLAMAttentionPooling(nn.Module):
         u = self.attn_u(tokens)
         scores = self.attn_w(v * u).squeeze(-1)
 
+        # mask padding and normalize
         masked_scores = scores.masked_fill(~mask, torch.finfo(scores.dtype).min)
         attn = torch.softmax(masked_scores, dim=1)
         attn = attn * mask.float()
@@ -41,6 +43,7 @@ class CLAMAttentionPooling(nn.Module):
         return pooled, attn
 
 
+# Simple tanh attention pooling — ABMIL-style
 class ABMILPooling(nn.Module):
     def __init__(self, model_dim: int, attn_dim: int = 128, dropout: float = 0.1):
         super().__init__()
@@ -67,6 +70,7 @@ class ABMILPooling(nn.Module):
         return pooled, attn
 
 
+# k-NN graph message-passing pooling — WiKG-style
 class WiKGPooling(nn.Module):
     def __init__(
         self,
@@ -87,6 +91,7 @@ class WiKGPooling(nn.Module):
         )
         self.readout = nn.Linear(self.model_dim, 1)
 
+    # One round of k-NN message passing with learned gating
     def _message_passing_once(self, x: torch.Tensor) -> torch.Tensor:
         n_tokens = int(x.shape[0])
         if n_tokens <= 1:
@@ -118,10 +123,17 @@ class WiKGPooling(nn.Module):
             valid_count = int(valid_mask.sum().item())
 
             if valid_count <= 0:
-                pooled_out.append(torch.zeros(self.model_dim, device=tokens.device, dtype=tokens.dtype))
-                attn_out.append(torch.zeros(max_len, device=tokens.device, dtype=tokens.dtype))
+                pooled_out.append(
+                    torch.zeros(
+                        self.model_dim, device=tokens.device, dtype=tokens.dtype
+                    )
+                )
+                attn_out.append(
+                    torch.zeros(max_len, device=tokens.device, dtype=tokens.dtype)
+                )
                 continue
 
+            # message passing over valid tokens only
             token_subset = tokens[batch_index, valid_mask]
             for _ in range(self.num_steps):
                 token_subset = self._message_passing_once(token_subset)
@@ -167,6 +179,7 @@ class PureMIL(nn.Module):
         if self.pooling_type not in {"abmil", "clam"}:
             raise ValueError("pooling_type must be 'abmil' or 'clam'")
 
+        # patch and coordinate projections
         self.patch_proj = nn.Linear(self.embed_dim, self.model_dim)
         if self.use_coords:
             self.coord_proj = nn.Sequential(
@@ -175,20 +188,26 @@ class PureMIL(nn.Module):
                 nn.Linear(self.model_dim, self.model_dim),
             )
 
+        # attention pooling
         if self.pooling_type == "abmil":
             self.pool = ABMILPooling(self.model_dim, attn_dim=attn_dim, dropout=dropout)
         else:
-            self.pool = CLAMAttentionPooling(self.model_dim, attn_dim=attn_dim, dropout=dropout)
+            self.pool = CLAMAttentionPooling(
+                self.model_dim, attn_dim=attn_dim, dropout=dropout
+            )
 
+        # classifier and logit adjustment buffer
         self.norm = nn.LayerNorm(self.model_dim)
         self.classifier = nn.Linear(self.model_dim, self.num_classes)
         self.register_buffer("logit_bias", torch.zeros(self.num_classes))
 
+    # Set logit adjustment bias from class counts and tau
     def set_logit_adjustment(self, class_counts: torch.Tensor, tau: float) -> None:
         counts = class_counts.float().clamp(min=1.0)
         priors = counts / counts.sum()
         self.logit_bias = (-tau * torch.log(priors)).to(self.classifier.weight.device)
 
+    # Pad a list of per-WSI patch tensors into a batch tensor with mask
     @staticmethod
     def _pad_batch(
         patch_batches: List[torch.Tensor],
@@ -221,6 +240,7 @@ class PureMIL(nn.Module):
 
         patch_tensor, coord_tensor, mask = self._pad_batch(patch_batches, coord_batches)
 
+        # project and optionally add coordinate encoding
         x = self.patch_proj(patch_tensor)
         if self.use_coords:
             x = x + 0.5 * self.coord_proj(coord_tensor)
@@ -237,6 +257,7 @@ class PureMIL(nn.Module):
         return logits, extras
 
 
+# Transformer encoder + configurable attention pooling
 class AggregationTransformer(nn.Module):
     def __init__(
         self,
@@ -262,6 +283,7 @@ class AggregationTransformer(nn.Module):
         if self.pooling_type not in {"abmil", "clam", "wikg"}:
             raise ValueError("pooling_type must be one of {'abmil', 'clam', 'wikg'}")
 
+        # patch and coordinate projections
         self.patch_proj = nn.Linear(self.embed_dim, self.model_dim)
         if self.use_coords:
             self.coord_proj = nn.Sequential(
@@ -270,6 +292,7 @@ class AggregationTransformer(nn.Module):
                 nn.Linear(self.model_dim, self.model_dim),
             )
 
+        # transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.model_dim,
             nhead=num_heads,
@@ -279,6 +302,8 @@ class AggregationTransformer(nn.Module):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # attention pooling
         if self.pooling_type == "abmil":
             self.pool = ABMILPooling(self.model_dim, attn_dim=attn_dim, dropout=dropout)
         elif self.pooling_type == "wikg":
@@ -289,17 +314,22 @@ class AggregationTransformer(nn.Module):
                 temperature=wikg_temperature,
             )
         else:
-            self.pool = CLAMAttentionPooling(self.model_dim, attn_dim=attn_dim, dropout=dropout)
+            self.pool = CLAMAttentionPooling(
+                self.model_dim, attn_dim=attn_dim, dropout=dropout
+            )
 
+        # classifier and logit adjustment buffer
         self.norm = nn.LayerNorm(self.model_dim)
         self.classifier = nn.Linear(self.model_dim, self.num_classes)
         self.register_buffer("logit_bias", torch.zeros(self.num_classes))
 
+    # Set logit adjustment bias from class counts and tau
     def set_logit_adjustment(self, class_counts: torch.Tensor, tau: float) -> None:
         counts = class_counts.float().clamp(min=1.0)
         priors = counts / counts.sum()
         self.logit_bias = (-tau * torch.log(priors)).to(self.classifier.weight.device)
 
+    # Pad a list of per-WSI patch tensors into a batch tensor with mask
     @staticmethod
     def _pad_batch(
         patch_batches: List[torch.Tensor],
@@ -332,6 +362,7 @@ class AggregationTransformer(nn.Module):
 
         patch_tensor, coord_tensor, mask = self._pad_batch(patch_batches, coord_batches)
 
+        # project and optionally add coordinate encoding
         x = self.patch_proj(patch_tensor)
         if self.use_coords:
             x = x + 0.5 * self.coord_proj(coord_tensor)

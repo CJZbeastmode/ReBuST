@@ -15,6 +15,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+
 def _collect_logits_targets(
     model: nn.Module,
     loader: DataLoader,
@@ -25,11 +26,30 @@ def _collect_logits_targets(
     progress_interval: int = 10,
     grad_accum_steps: int = 1,
 ) -> Dict:
+    """
+    Collects logits and targets from the model on the given data loader, optionally performing training if optimizer is provided.
+
+    Args:
+        model: The model to evaluate/train.
+        loader: DataLoader for the data to evaluate/train on.
+        device: Device to run the computations on.
+        criterion: Loss function to compute the loss.
+        optimizer: Optional optimizer for training. If None, the model is only evaluated.
+        progress_prefix: Optional prefix for progress printouts during training.
+        progress_interval: Interval (in batches) for printing progress during training.
+        grad_accum_steps: Number of batches to accumulate gradients before stepping the optimizer during training.
+
+    Returns:
+        A dictionary containing metrics such as loss, accuracy, etc., as well as collected targets.
+    """
+
+    # Setup
     is_train = optimizer is not None
     progress_interval = max(1, int(progress_interval))
     grad_accum_steps = max(1, int(grad_accum_steps))
     model.train(is_train)
 
+    # Initialization
     losses: List[float] = []
     all_targets: List[int] = []
     all_probs: List[np.ndarray] = []
@@ -41,8 +61,10 @@ def _collect_logits_targets(
         if is_train:
             optimizer.zero_grad()
 
+        # Loop over batches
         for batch_idx, batch in enumerate(loader, start=1):
 
+            # Move data to device
             move_start = time.perf_counter()
             patch_batches = [item["embeddings"].to(device) for item in batch]
             coord_batches = [item["coords"].to(device) for item in batch]
@@ -51,17 +73,23 @@ def _collect_logits_targets(
             )
             move_elapsed = time.perf_counter() - move_start
 
+            # Forward pass
             forward_start = time.perf_counter()
             model_output = model(patch_batches, coord_batches)
-            logits = model_output[0] if isinstance(model_output, tuple) else model_output
+            logits = (
+                model_output[0] if isinstance(model_output, tuple) else model_output
+            )
             cls_loss = criterion(logits, targets)
             loss = cls_loss
             forward_elapsed = time.perf_counter() - forward_start
 
             backward_elapsed = 0.0
+            # Backward pass and optimization step (if training)
             if is_train:
                 backward_start = time.perf_counter()
+                # Scale loss by grad_accum_steps for gradient accumulation
                 (loss / grad_accum_steps).backward()
+                # Step optimizer every grad_accum_steps batches or on the last batch
                 if batch_idx % grad_accum_steps == 0 or batch_idx == total_batches:
                     optimizer.step()
                     optimizer.zero_grad()
@@ -96,6 +124,7 @@ def _collect_logits_targets(
                     f"post_time={post_elapsed:.2f}s"
                 )
 
+    # Compute metrics
     all_targets_np = np.array(all_targets)
     all_preds_np = np.array(all_preds)
     all_probs_np = np.vstack(all_probs)
@@ -164,6 +193,22 @@ def train_one_epoch(
     progress_interval: int = 10,
     grad_accum_steps: int = 1,
 ) -> Dict:
+    """
+    Trains the model for one epoch and returns metrics.
+
+    Args:
+        model: The model to train.
+        loader: DataLoader for the training data.
+        optimizer: Optimizer for updating model parameters.
+        criterion: Loss function.
+        device: Device to run the training on.
+        progress_prefix: Optional prefix for progress printouts.
+        progress_interval: Interval (in batches) for printing progress.
+        grad_accum_steps: Number of batches to accumulate gradients before stepping the optimizer.
+    
+    Returns:
+        A dictionary containing training metrics such as loss, accuracy, etc.
+    """
     return _collect_logits_targets(
         model,
         loader,
@@ -182,4 +227,16 @@ def evaluate(
     criterion: nn.Module,
     device: torch.device,
 ) -> Dict:
+    """
+    Evaluates the model on the given data loader and returns metrics.
+
+    Args:
+        model: The model to evaluate.
+        loader: DataLoader for the evaluation data.
+        criterion: Loss function.
+        device: Device to run the evaluation on.
+    
+    Returns:
+        A dictionary containing evaluation metrics such as loss, accuracy, etc.
+    """
     return _collect_logits_targets(model, loader, device, criterion, optimizer=None)

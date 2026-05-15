@@ -24,6 +24,7 @@ from src.ablation_patch_selector.SASHA.data import read_label_from_path
 from src.ablation_patch_selector.SASHA.models import HAFEDClassifier
 
 
+# Safely coerce to float, returning nan on failure
 def _safe_float(value: float) -> float:
     try:
         return float(value)
@@ -31,7 +32,10 @@ def _safe_float(value: float) -> float:
         return float("nan")
 
 
-def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -> np.ndarray:
+# Compute per-class confusion matrix
+def _confusion_matrix(
+    labels: np.ndarray, preds: np.ndarray, num_classes: int
+) -> np.ndarray:
     mat = np.zeros((num_classes, num_classes), dtype=np.int64)
     for label, pred in zip(labels, preds):
         if 0 <= label < num_classes and 0 <= pred < num_classes:
@@ -39,6 +43,7 @@ def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -
     return mat
 
 
+# Compute classification metrics from labels, predictions, and probabilities
 def _classification_metrics(
     labels: np.ndarray, preds: np.ndarray, probs: np.ndarray, num_classes: int
 ) -> Dict[str, object]:
@@ -52,7 +57,9 @@ def _classification_metrics(
             "per_class_f1": [float("nan")] * num_classes,
             "per_class_accuracy_summary": [],
             "support": [0] * num_classes,
-            "confusion_matrix": np.zeros((num_classes, num_classes), dtype=np.int64).tolist(),
+            "confusion_matrix": np.zeros(
+                (num_classes, num_classes), dtype=np.int64
+            ).tolist(),
         }
 
     conf = _confusion_matrix(labels, preds, num_classes)
@@ -123,6 +130,7 @@ def _classification_metrics(
     }
 
 
+# Bootstrap resampling to estimate metric standard deviations
 def _bootstrap_metric_std(
     labels: np.ndarray,
     preds: np.ndarray,
@@ -165,6 +173,7 @@ def _bootstrap_metric_std(
     return out
 
 
+# List .pt files in a directory
 def list_pt_files(input_dir: str) -> List[Path]:
     base = Path(input_dir)
     if not base.exists() or not base.is_dir():
@@ -172,13 +181,17 @@ def list_pt_files(input_dir: str) -> List[Path]:
     files = [
         p
         for p in sorted(base.iterdir())
-        if p.is_file() and p.suffix.lower() == ".pt" and not p.name.startswith(".") and not p.name.startswith("._")
+        if p.is_file()
+        and p.suffix.lower() == ".pt"
+        and not p.name.startswith(".")
+        and not p.name.startswith("._")
     ]
     if not files:
         raise FileNotFoundError(f"No .pt files found in {input_dir}")
     return files
 
 
+# Load HAFED checkpoint and build model
 def load_hafed(hafed_path: str, device: torch.device) -> Tuple[HAFEDClassifier, Dict]:
     ckpt = torch.load(hafed_path, map_location=device)
     model = HAFEDClassifier(
@@ -192,6 +205,7 @@ def load_hafed(hafed_path: str, device: torch.device) -> Tuple[HAFEDClassifier, 
     return model, ckpt
 
 
+# Load raw embeddings from a .pt file
 def _load_embeddings(pt_path: str) -> torch.Tensor:
     loaded = torch.load(pt_path, map_location="cpu")
     if isinstance(loaded, dict):
@@ -213,6 +227,7 @@ def _load_embeddings(pt_path: str) -> torch.Tensor:
     return embeddings
 
 
+# Predict label for one WSI using EvoPS patch selection
 def predict_one(
     hafed: HAFEDClassifier,
     embeddings: torch.Tensor,
@@ -261,8 +276,15 @@ def predict_one(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run EvoPS inference")
-    parser.add_argument("--input-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test", help="Directory with per-WSI .pt files containing test embeddings")
-    parser.add_argument("--hafed-checkpoint", default="data/models/ablation_patch_selector/evops/best_hafed.pt")
+    parser.add_argument(
+        "--input-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test",
+        help="Directory with per-WSI .pt files containing test embeddings",
+    )
+    parser.add_argument(
+        "--hafed-checkpoint",
+        default="data/models/ablation_patch_selector/evops/best_hafed.pt",
+    )
     parser.add_argument("--out-json", default="data/benchmark/evops.json")
     parser.add_argument("--output", dest="output", action="store_true", default=True)
     parser.add_argument("--no-output", dest="output", action="store_false")
@@ -290,6 +312,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    # Set up
     args = parse_args()
     device = torch.device(args.device)
     hafed, ckpt = load_hafed(args.hafed_checkpoint, device=device)
@@ -302,6 +325,8 @@ def main() -> None:
     y_pred: List[int] = []
     y_prob: List[np.ndarray] = []
     skipped_missing_label = 0
+
+    # Inference loop
     for pt_path in list_pt_files(args.input_dir):
         case_id = pt_path.stem
         embeddings = _load_embeddings(str(pt_path))
@@ -342,6 +367,7 @@ def main() -> None:
             }
         )
 
+    # Compute metrics
     labels_np = np.asarray(y_true, dtype=np.int64)
     preds_np = np.asarray(y_pred, dtype=np.int64)
     probs_np = (

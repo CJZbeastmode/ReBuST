@@ -47,6 +47,7 @@ class EpisodeRollout:
     selected_indices: List[int]
 
 
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -54,6 +55,7 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
+# Pick top-k candidate patches by HAFED attention score
 def pick_candidate_pool(
     embeddings: torch.Tensor,
     hafed: HAFEDClassifier,
@@ -81,6 +83,7 @@ def pick_candidate_pool(
     return embeddings[topi], topi, topv
 
 
+# Get HAFED probability for the true class on a patch subset
 def classify_subset_probability(
     hafed: HAFEDClassifier,
     subset_embeddings: torch.Tensor,
@@ -97,6 +100,7 @@ def classify_subset_probability(
         return float(probs[0, int(true_label_idx)].item())
 
 
+# Run one RL episode of patch selection with the policy
 def run_selector_episode(
     sample: PTEmbeddingSample,
     candidate_embeddings: torch.Tensor,
@@ -107,7 +111,9 @@ def run_selector_episode(
     gamma: float,
     deterministic: bool,
 ) -> Tuple[EpisodeRollout, float, int]:
-    selected_mask = torch.zeros(candidate_embeddings.shape[0], dtype=torch.bool, device=device)
+    selected_mask = torch.zeros(
+        candidate_embeddings.shape[0], dtype=torch.bool, device=device
+    )
     chosen: List[int] = []
 
     log_probs: List[torch.Tensor] = []
@@ -119,7 +125,9 @@ def run_selector_episode(
     global_context = candidate_embeddings.mean(dim=0, keepdim=True).to(device)
 
     for step in range(max_steps):
-        step_frac = torch.tensor([[float(step) / max(1, max_steps)]], dtype=torch.float32, device=device)
+        step_frac = torch.tensor(
+            [[float(step) / max(1, max_steps)]], dtype=torch.float32, device=device
+        )
 
         logits, value = policy(
             candidate_embeddings.unsqueeze(0).to(device),
@@ -131,13 +139,17 @@ def run_selector_episode(
 
         # mask already selected token actions
         logits = logits.clone()
-        logits[:-1] = logits[:-1].masked_fill(selected_mask, torch.finfo(logits.dtype).min)
+        logits[:-1] = logits[:-1].masked_fill(
+            selected_mask, torch.finfo(logits.dtype).min
+        )
 
         dist = Categorical(logits=logits)
         if deterministic:
             action = int(torch.argmax(logits).item())
             log_prob = torch.log_softmax(logits, dim=0)[action]
-            entropy = -(torch.softmax(logits, dim=0) * torch.log_softmax(logits, dim=0)).sum()
+            entropy = -(
+                torch.softmax(logits, dim=0) * torch.log_softmax(logits, dim=0)
+            ).sum()
         else:
             sampled = dist.sample()
             action = int(sampled.item())
@@ -198,6 +210,7 @@ def run_selector_episode(
     return rollout, final_prob, len(chosen)
 
 
+# Evaluate HAFED on a loader, returning loss and accuracy
 def evaluate_hafed(
     model: HAFEDClassifier,
     loader: DataLoader,
@@ -214,7 +227,9 @@ def evaluate_hafed(
                 emb = sample.embeddings.to(device)
                 mask = torch.ones(1, emb.shape[0], dtype=torch.bool, device=device)
                 logits, _, _ = model(emb.unsqueeze(0), mask)
-                target = torch.tensor([sample.label_idx], dtype=torch.long, device=device)
+                target = torch.tensor(
+                    [sample.label_idx], dtype=torch.long, device=device
+                )
                 loss = F.cross_entropy(logits, target)
 
                 total += 1
@@ -228,6 +243,7 @@ def evaluate_hafed(
     return {"loss": total_loss / total, "acc": correct / total}
 
 
+# Evaluate selector + HAFED pipeline on a loader
 def evaluate_selector(
     hafed: HAFEDClassifier,
     policy: SashaPolicyValue,
@@ -272,7 +288,9 @@ def evaluate_selector(
                 top_idx = int(torch.argmax(candidates.norm(dim=-1)).item())
                 rollout.selected_indices = [top_idx]
 
-            subset = candidates[torch.tensor(rollout.selected_indices, dtype=torch.long)]
+            subset = candidates[
+                torch.tensor(rollout.selected_indices, dtype=torch.long)
+            ]
             with torch.no_grad():
                 mask = torch.ones(1, subset.shape[0], dtype=torch.bool, device=device)
                 logits, _, _ = hafed(subset.unsqueeze(0).to(device), mask)
@@ -296,9 +314,15 @@ def evaluate_selector(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train SASHA selector pipeline")
 
-    parser.add_argument("--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/train")
-    parser.add_argument("--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/val")
-    parser.add_argument("--out-dir", default="data/models/ablation_patch_selector/sasha")
+    parser.add_argument(
+        "--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/train"
+    )
+    parser.add_argument(
+        "--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/med_img/val"
+    )
+    parser.add_argument(
+        "--out-dir", default="data/models/ablation_patch_selector/sasha"
+    )
     parser.add_argument(
         "--input-format",
         type=str,
@@ -326,7 +350,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-heads", type=int, default=4)
 
     parser.add_argument("--max-patches-per-wsi", type=int, default=0)
-    parser.add_argument("--patch-sample-mode", type=str, default="uniform", choices=["uniform", "head", "random"])
+    parser.add_argument(
+        "--patch-sample-mode",
+        type=str,
+        default="uniform",
+        choices=["uniform", "head", "random"],
+    )
 
     parser.add_argument("--hafed-epochs", type=int, default=10)
     parser.add_argument("--hafed-lr", type=float, default=1e-4)
@@ -340,8 +369,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=24)
 
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--logit-adjust-tau", type=float, default=1.0,
-                        help="Logit adjustment tau (0 = disabled)")
+    parser.add_argument(
+        "--logit-adjust-tau",
+        type=float,
+        default=1.0,
+        help="Logit adjustment tau (0 = disabled)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -352,6 +385,7 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # ---------------- Load data ----------------
     train_items, label_map = build_items_and_label_map(
         args.train_embeddings_dir,
         input_format=args.input_format,
@@ -380,15 +414,33 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
         svs_embed_backend=args.svs_embed_backend,
     )
 
+    # === Imbalance: WeightedRandomSampler + logit adjustment ===
     train_labels = [int(item[2]) for item in train_items]
-    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(np.float32)
+    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(
+        np.float32
+    )
     class_counts[class_counts == 0.0] = 1.0
-    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(np.float32)
-    sample_weights = torch.tensor([class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32)
-    train_sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(
+        np.float32
+    )
+    sample_weights = torch.tensor(
+        [class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32
+    )
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights, num_samples=len(sample_weights), replacement=True
+    )
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=False, sampler=train_sampler, collate_fn=collate_samples)
-    val_loader = DataLoader(val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples)
+    # ---------------- Data & loaders ----------------
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        sampler=train_sampler,
+        collate_fn=collate_samples,
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples
+    )
 
     print("[SASHA] ================================================")
     print(f"[SASHA] device={device} seed={args.seed} out_dir={args.out_dir}")
@@ -411,8 +463,12 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
         num_classes=len(label_map),
         num_heads=args.num_heads,
     ).to(device)
-    hafed.set_logit_adjustment(torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau)
-    print(f"[SASHA] logit_adjust_tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}")
+    hafed.set_logit_adjustment(
+        torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau
+    )
+    print(
+        f"[SASHA] logit_adjust_tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}"
+    )
 
     hafed_opt = torch.optim.AdamW(hafed.parameters(), lr=args.hafed_lr)
 
@@ -436,7 +492,9 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
             for sample in batch:
                 emb = sample.embeddings.to(device)
                 mask = torch.ones(1, emb.shape[0], dtype=torch.bool, device=device)
-                target = torch.tensor([sample.label_idx], dtype=torch.long, device=device)
+                target = torch.tensor(
+                    [sample.label_idx], dtype=torch.long, device=device
+                )
 
                 logits, _, _ = hafed(emb.unsqueeze(0), mask)
                 loss = F.cross_entropy(logits, target)
@@ -496,7 +554,9 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
 
     # ---------------- Stage 2: RL selector ----------------
     print("[SASHA][SELECTOR] Stage-2 training start")
-    policy = SashaPolicyValue(embed_dim=args.embed_dim, hidden_dim=args.hidden_dim).to(device)
+    policy = SashaPolicyValue(embed_dim=args.embed_dim, hidden_dim=args.hidden_dim).to(
+        device
+    )
     pol_opt = torch.optim.AdamW(policy.parameters(), lr=args.selector_lr)
 
     best_selector_score = -math.inf
@@ -547,7 +607,9 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
                 if not rollout.log_probs:
                     continue
 
-                returns = torch.tensor(rollout.rewards, dtype=torch.float32, device=device)
+                returns = torch.tensor(
+                    rollout.rewards, dtype=torch.float32, device=device
+                )
                 values = torch.stack(rollout.values)
                 log_probs = torch.stack(rollout.log_probs)
                 entropies = torch.stack(rollout.entropies)
@@ -557,7 +619,11 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
                 value_loss = F.mse_loss(values, returns)
                 entropy_term = entropies.mean()
 
-                loss = actor_loss + args.value_coef * value_loss - args.entropy_coef * entropy_term
+                loss = (
+                    actor_loss
+                    + args.value_coef * value_loss
+                    - args.entropy_coef * entropy_term
+                )
 
                 pol_opt.zero_grad(set_to_none=True)
                 loss.backward()
@@ -631,8 +697,11 @@ def train_sasha(args: argparse.Namespace) -> Dict[str, object]:
             )
             print(f"[SELECTOR] saved best checkpoint: {best_selector_path}")
 
-    print(f"[SASHA][SELECTOR] Stage-2 training end best_score={best_selector_score:.4f}")
+    print(
+        f"[SASHA][SELECTOR] Stage-2 training end best_score={best_selector_score:.4f}"
+    )
 
+    # ---------------- Save & report ----------------
     config_path = os.path.join(args.out_dir, "sasha_train_config.json")
     with open(config_path, "w", encoding="utf-8") as fh:
         json.dump(

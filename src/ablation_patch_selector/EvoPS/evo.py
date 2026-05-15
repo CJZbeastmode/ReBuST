@@ -10,15 +10,18 @@ import torch
 from src.ablation_patch_selector.SASHA.models import HAFEDClassifier
 
 
+# Set random seeds
 def _set_seed(seed: int) -> None:
     random.seed(seed)
     torch.manual_seed(seed)
 
 
+# Deduplicate and sort a list of indices
 def _unique_sorted(indices: Iterable[int]) -> List[int]:
     return sorted(set(int(x) for x in indices))
 
 
+# Clamp budget to valid range given n patches
 def _clamp_budget(budget: int, n: int) -> int:
     if n <= 0:
         return 0
@@ -28,6 +31,7 @@ def _clamp_budget(budget: int, n: int) -> int:
     return min(budget, n)
 
 
+# Evaluate fitness of a patch subset: HAFED probability for target class
 def _fitness(
     hafed: HAFEDClassifier,
     candidate_embeddings: torch.Tensor,
@@ -45,6 +49,7 @@ def _fitness(
         return float(probs[int(target_idx)].item())
 
 
+# Predict label index and probabilities from embeddings
 def _predict_label(
     hafed: HAFEDClassifier,
     embeddings: torch.Tensor,
@@ -57,6 +62,7 @@ def _predict_label(
     return int(torch.argmax(probs).item()), probs
 
 
+# Initialize population with one attention-seeded individual plus random fill
 def _seed_population(
     n: int,
     budget: int,
@@ -81,6 +87,7 @@ def _seed_population(
     return population
 
 
+# Tournament selection from population
 def _tournament(population: List[List[int]], scores: List[float]) -> List[int]:
     if not population:
         return []
@@ -90,6 +97,7 @@ def _tournament(population: List[List[int]], scores: List[float]) -> List[int]:
     return list(population[best])
 
 
+# Uniform crossover between two parents
 def _crossover(parent_a: List[int], parent_b: List[int], budget: int) -> List[int]:
     pool = _unique_sorted(list(parent_a) + list(parent_b))
     if len(pool) <= budget:
@@ -98,6 +106,7 @@ def _crossover(parent_a: List[int], parent_b: List[int], budget: int) -> List[in
     return _unique_sorted(picked)
 
 
+# Random single-replacement mutation
 def _mutate(child: List[int], n: int, mutation_rate: float, budget: int) -> List[int]:
     if not child or n <= 0:
         return child
@@ -145,7 +154,9 @@ def evo_select_subset(
 
     if budget >= n:
         pred_idx, _ = _predict_label(hafed, candidate_embeddings, device=device)
-        best_score = _fitness(hafed, candidate_embeddings, list(range(n)), pred_idx, device)
+        best_score = _fitness(
+            hafed, candidate_embeddings, list(range(n)), pred_idx, device
+        )
         return list(range(n)), pred_idx, best_score
 
     if scores is None:
@@ -171,7 +182,9 @@ def evo_select_subset(
             _fitness(hafed, candidate_embeddings, member, target_idx, device)
             for member in population
         ]
-        ranked = sorted(range(len(population)), key=lambda i: fitness_scores[i], reverse=True)
+        ranked = sorted(
+            range(len(population)), key=lambda i: fitness_scores[i], reverse=True
+        )
         elites = [population[i] for i in ranked[:elite_count]]
 
         if fitness_scores[ranked[0]] > best_score:
@@ -192,7 +205,9 @@ def evo_select_subset(
             if len(child) < budget:
                 missing = [i for i in range(n) if i not in set(child)]
                 if missing:
-                    child.extend(random.sample(missing, k=min(len(missing), budget - len(child))))
+                    child.extend(
+                        random.sample(missing, k=min(len(missing), budget - len(child)))
+                    )
                     child = _unique_sorted(child)
             next_population.append(child)
 
@@ -200,6 +215,8 @@ def evo_select_subset(
 
     if not best_indices:
         best_indices = population[0]
-        best_score = _fitness(hafed, candidate_embeddings, best_indices, target_idx, device)
+        best_score = _fitness(
+            hafed, candidate_embeddings, best_indices, target_idx, device
+        )
 
     return _unique_sorted(best_indices)[:budget], pred_idx, float(best_score)

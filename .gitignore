@@ -35,6 +35,8 @@ model_doc/*
 
 **/*.svs
 **/*.png
+!docs/visualizations/*.png
+
 
 *.sh
 *.fish

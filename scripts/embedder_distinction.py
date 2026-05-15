@@ -34,7 +34,6 @@ import time
 from scipy import stats
 
 
-
 repo_root = str(Path(__file__).resolve().parents[1])
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
@@ -235,7 +234,7 @@ def run(
     # ------------------------------------------------------------------
     resolved_cancer_type = extract_cancer_type_from_path(image_path)
     print(f"[INFO] Cancer type: {resolved_cancer_type}")
-   
+
     # ------------------------------------------------------------------
     # Build scorer
     # ------------------------------------------------------------------

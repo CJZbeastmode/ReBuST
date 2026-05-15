@@ -369,7 +369,9 @@ if __name__ == "__main__":
     # Run HUMBE
     wsi = WSI(args.image, multistage=True)
     score_module = PATCH_SCORE_MODULES[args.score]()
-    output = f"data/visualizations/humbe/humbe_{str(args.budget).replace('.', '_')}.html"
+    output = (
+        f"data/visualizations/humbe/humbe_{str(args.budget).replace('.', '_')}.html"
+    )
 
     humbe(
         wsi,

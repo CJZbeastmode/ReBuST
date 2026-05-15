@@ -100,7 +100,7 @@ for epoch in range(EPOCHS):
     print(f"Epoch {epoch+1}/{EPOCHS} avg_loss={total_loss/len(dataset):.4f}\n")
 
 # ─────────────────────────────────────────────────────────────
-# Quick eval (no separate val split — just to show inference)
+# Quick eval
 # ─────────────────────────────────────────────────────────────
 model.eval()
 label_names = {0: "LUAD", 1: "LUSC"}

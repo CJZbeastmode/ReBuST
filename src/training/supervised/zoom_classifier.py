@@ -161,7 +161,3 @@ def _cli():
 
 if __name__ == "__main__":
     train()
-
-
-# Result
-# [Z] Epoch 100/100 | Train CE 0.1683 | Train Acc 0.929 | Val CE 0.1864 | Val Acc 0.921

@@ -46,6 +46,7 @@ class PTEmbeddingDirDataset(Dataset):
     def __len__(self) -> int:
         return len(self.items)
 
+    # Coerce value to float32 tensor of the requested rank
     @staticmethod
     def _to_tensor(value: object, dim: int) -> Optional[torch.Tensor]:
         if value is None:
@@ -60,6 +61,7 @@ class PTEmbeddingDirDataset(Dataset):
             return None
         return tensor
 
+    # Subsample patch indices according to max_patches_per_wsi and sample_mode
     def _sample_indices(self, n: int, case_id: str) -> torch.Tensor:
         if self.max_patches_per_wsi <= 0 or n <= self.max_patches_per_wsi:
             return torch.arange(n, dtype=torch.long)
@@ -87,6 +89,7 @@ class PTEmbeddingDirDataset(Dataset):
             idx = idx[:k]
         return idx
 
+    # Lazy-initialize embedding backend
     def _get_embedder(self):
         if self._embedder is None:
             from src.utils.embedder import Embedder
@@ -94,6 +97,7 @@ class PTEmbeddingDirDataset(Dataset):
             self._embedder = Embedder(img_backend=self.svs_embed_backend)
         return self._embedder
 
+    # Derive label string from SVS filename stem (last dash-separated token)
     @staticmethod
     def _svs_label_from_stem(stem: str) -> str:
         tokens = [tok for tok in stem.split("-") if tok]
@@ -101,7 +105,10 @@ class PTEmbeddingDirDataset(Dataset):
             return tokens[-1].upper()
         return stem.upper()
 
-    def _load_from_svs(self, svs_path: str, label_str: str, label_idx: int) -> PTEmbeddingSample:
+    # Load and embed patches directly from an SVS file
+    def _load_from_svs(
+        self, svs_path: str, label_str: str, label_idx: int
+    ) -> PTEmbeddingSample:
         from src.utils.wsi import WSI
 
         embedder = self._get_embedder()
@@ -114,7 +121,9 @@ class PTEmbeddingDirDataset(Dataset):
         else:
             raise ValueError(f"Unknown svs_level_mode: {self.svs_level_mode}")
 
-        keys = [(target_level, int(x), int(y)) for x, y in wsi.iterate_patches(target_level)]
+        keys = [
+            (target_level, int(x), int(y)) for x, y in wsi.iterate_patches(target_level)
+        ]
         if not keys:
             embeddings = torch.zeros(1, 512, dtype=torch.float32)
             coords = torch.zeros(1, 3, dtype=torch.float32)
@@ -150,7 +159,9 @@ class PTEmbeddingDirDataset(Dataset):
                 if emb.numel() == 0:
                     continue
                 embs.append(emb)
-                coord_rows.append(torch.tensor([float(lvl), float(x), float(y)], dtype=torch.float32))
+                coord_rows.append(
+                    torch.tensor([float(lvl), float(x), float(y)], dtype=torch.float32)
+                )
                 active[(int(lvl), int(x), int(y))] = {}
             except Exception:
                 continue
@@ -181,8 +192,11 @@ class PTEmbeddingDirDataset(Dataset):
         ext = Path(sample_path).suffix.lower()
 
         if ext == ".svs":
-            return self._load_from_svs(sample_path, label_str=label_str, label_idx=label_idx)
+            return self._load_from_svs(
+                sample_path, label_str=label_str, label_idx=label_idx
+            )
 
+        # Load PT file
         pt_path = sample_path
         loaded = torch.load(pt_path, map_location="cpu")
 
@@ -197,6 +211,7 @@ class PTEmbeddingDirDataset(Dataset):
         if coords is None or coords.shape[0] != embeddings.shape[0]:
             coords = torch.zeros(embeddings.shape[0], 3, dtype=torch.float32)
 
+        # Sample patch subset
         chosen = self._sample_indices(int(embeddings.shape[0]), Path(pt_path).stem)
         embeddings = embeddings[chosen]
         coords = coords[chosen]
@@ -215,6 +230,7 @@ class PTEmbeddingDirDataset(Dataset):
         )
 
 
+# List .pt or .svs files in a directory
 def list_input_files(input_dir: str, input_format: str = "pt") -> List[str]:
     input_format = str(input_format).lower()
     if input_format not in {"pt", "svs", "auto"}:
@@ -234,7 +250,10 @@ def list_input_files(input_dir: str, input_format: str = "pt") -> List[str]:
     files = [
         str(p)
         for p in sorted(base.iterdir())
-        if p.is_file() and p.suffix.lower() in exts and not p.name.startswith(".") and not p.name.startswith("._")
+        if p.is_file()
+        and p.suffix.lower() in exts
+        and not p.name.startswith(".")
+        and not p.name.startswith("._")
     ]
     if not files:
         raise FileNotFoundError(
@@ -243,6 +262,7 @@ def list_input_files(input_dir: str, input_format: str = "pt") -> List[str]:
     return files
 
 
+# Read label string from a .pt or .svs file path
 def read_label_from_path(sample_path: str) -> str:
     ext = Path(sample_path).suffix.lower()
     if ext == ".pt":
@@ -257,6 +277,7 @@ def read_label_from_path(sample_path: str) -> str:
     raise ValueError(f"Unsupported file extension: {sample_path}")
 
 
+# Build item list and label map from a training directory
 def build_items_and_label_map(
     train_dir: str,
     input_format: str = "pt",
@@ -275,10 +296,13 @@ def build_items_and_label_map(
 
     uniq = sorted(set(labels.values()))
     label_map = {name: idx for idx, name in enumerate(uniq)}
-    items = [(path, labels[path], label_map[labels[path]]) for path in sorted(labels.keys())]
+    items = [
+        (path, labels[path], label_map[labels[path]]) for path in sorted(labels.keys())
+    ]
     return items, label_map
 
 
+# Build item list from a directory using a pre-existing label map
 def build_items_with_label_map(
     embeddings_dir: str,
     label_map: Dict[str, int],
@@ -312,5 +336,6 @@ def build_items_with_label_map(
     return items
 
 
+# Pass-through collate — each WSI has a different patch count so batching is deferred
 def collate_samples(batch: List[PTEmbeddingSample]) -> List[PTEmbeddingSample]:
     return batch

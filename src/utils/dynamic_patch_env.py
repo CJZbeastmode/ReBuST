@@ -1,8 +1,26 @@
-"""Module for dynamic patch env."""
+"""
+DynamicPatchEnv — RL environment for hierarchical WSI exploration
+===============================================================
+
+This module defines the runtime environment used by RL policies to
+select STOP vs ZOOM actions on WSIs. It is designed to be:
+- Robust to I/O and embedding failures
+- Deterministic in state shape (always 515-D)
+- Compatible with patch-score modules used by HUMBE/greedy baselines
+"""
+
+# ==========================================================================
+# Imports
+# ==========================================================================
 
 import os
 import numpy as np
 from src.utils.patch_scores import *
+
+
+# ==========================================================================
+# Environment
+# ==========================================================================
 
 
 class DynamicPatchEnv:
@@ -28,6 +46,9 @@ class DynamicPatchEnv:
     Total state dimensionality: 515
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(
         self,
         wsi,
@@ -52,6 +73,20 @@ class DynamicPatchEnv:
             Spatial size (in pixels) of extracted patches
         max_steps : int
             Maximum number of ZOOM actions per episode
+
+        Args:
+            self: Description.
+            wsi: Description.
+            patch_score: Description.
+            patch_score_aggregation: Description.
+            image_class: Description.
+            patch_size: Description.
+            max_steps: Description.
+            backup_dir: Description.
+            backup_interval: Description.
+
+        Returns:
+            None: Description.
         """
 
         self.wsi = wsi
@@ -122,6 +157,12 @@ class DynamicPatchEnv:
 
         Expected naming example:
             TCGA-05-4390-LUAD.svs -> LUAD
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
         """
         image_path = getattr(self.wsi, "image_path", None)
         if not image_path:
@@ -136,6 +177,9 @@ class DynamicPatchEnv:
                 return token
         return None
 
+    # ---------------------------------------------------------------------------
+    # _blank_state
+    # ---------------------------------------------------------------------------
     def _blank_state(self):
         """
         Return a valid zero-valued state vector.
@@ -143,15 +187,30 @@ class DynamicPatchEnv:
         This serves as a last-resort fallback in case of unrecoverable
         errors (e.g. corrupt WSI tiles). The invariant that the state
         dimensionality remains constant is strictly preserved.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
         """
         return np.zeros(3 + 512, dtype=np.float32)
 
+    # ---------------------------------------------------------------------------
+    # _sample_root
+    # ---------------------------------------------------------------------------
     def _sample_root(self):
         """
         Sample a random starting location at the coarsest pyramid level.
 
         This encourages spatial diversity at episode initialization
         while keeping the initial observation computationally cheap.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
         """
         # if len(self.root_patch_cache) > 0:
         #    ret_patch = self.root_patch_cache[0]
@@ -166,6 +225,9 @@ class DynamicPatchEnv:
         y = np.random.randint(0, max(1, H - self.patch_size))
         return lvl, x, y
 
+    # ---------------------------------------------------------------------------
+    # sample_root_by_density
+    # ---------------------------------------------------------------------------
     def sample_root_by_density(self, n_dense=4, n_mid=3, n_sparse=3):
         """
         Sample n_dense, n_mid, and n_sparse tissue patches from the root (coarsest) pyramid level based on tissue density.
@@ -176,6 +238,12 @@ class DynamicPatchEnv:
 
         Returns:
             List of tuples: [(level, x, y, density_type)]
+
+        Args:
+            self: Description.
+            n_dense: Description.
+            n_mid: Description.
+            n_sparse: Description.
         """
         lvl = self.max_level
         W, H = self.wsi.levels_info[lvl]["size"]
@@ -212,11 +280,21 @@ class DynamicPatchEnv:
 
         return dense + mid + sparse
 
+    # ---------------------------------------------------------------------------
+    # calculate_tissue_density
+    # ---------------------------------------------------------------------------
     def calculate_tissue_density(self, patch):
         """
         Calculate the tissue density of a given patch. This function counts the number of non-background pixels
         in the patch to estimate tissue density.
         Returns a value between 0 (no tissue) and 1 (completely full of tissue).
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            object: Description.
         """
         # Convert patch to a binary mask (tissue vs. background)
         # Assuming a method `is_tissue_pixel` to check if a pixel is part of tissue
@@ -226,15 +304,28 @@ class DynamicPatchEnv:
         # Return density as the proportion of tissue pixels
         return tissue_pixels / total_pixels if total_pixels > 0 else 0
 
+    # ---------------------------------------------------------------------------
+    # is_tissue_pixel
+    # ---------------------------------------------------------------------------
     def is_tissue_pixel(self, pixel):
         """
         Check if a pixel is considered as tissue (non-background).
         This is just a placeholder, you might use a thresholding or color-based method.
+
+        Args:
+            self: Description.
+            pixel: Description.
+
+        Returns:
+            object: Description.
         """
         # For now, assuming a simplistic threshold on the pixel value
         # Adjust this depending on how you define tissue in your images
         return pixel > 0  # Example: non-zero pixel is considered tissue
 
+    # ---------------------------------------------------------------------------
+    # _safe_embed
+    # ---------------------------------------------------------------------------
     def _safe_embed(self, patch):
         """
         Compute a PLIP embedding in a numerically safe manner.
@@ -242,6 +333,13 @@ class DynamicPatchEnv:
         Any embedding failure (runtime error, NaNs, unexpected shapes)
         is handled locally and results in a zero vector. This prevents
         silent corruption of the replay buffer and downstream gradients.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            object: Description.
         """
         try:
             emb = self.embedder.img_emb(patch).numpy()
@@ -272,6 +370,9 @@ class DynamicPatchEnv:
 
         return emb1
 
+    # ---------------------------------------------------------------------------
+    # _get_state
+    # ---------------------------------------------------------------------------
     def _get_state(self, patch=None):
         """
         Construct the RL state vector.
@@ -279,6 +380,13 @@ class DynamicPatchEnv:
         The method is exception-safe by design and guarantees that a
         valid state vector is always returned, even if patch access
         or embedding computation fails.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            object: Description.
         """
         try:
             W, H = self.wsi.levels_info[self.curr_level]["size"]
@@ -305,6 +413,9 @@ class DynamicPatchEnv:
             # Absolute fallback: environment must not crash
             return self._blank_state()
 
+    # ---------------------------------------------------------------------------
+    # calculate_score
+    # ---------------------------------------------------------------------------
     def calculate_score(self, parent_level: int, parent_x: int, parent_y: int):
         """
         Compute STOP and ZOOM scores for a given parent patch location.
@@ -322,6 +433,15 @@ class DynamicPatchEnv:
             Indicates whether score computation was successful
         scores : list[float]
             [s_stop, s_zoom]
+
+        Args:
+            self: Description.
+            parent_level: Description.
+            parent_x: Description.
+            parent_y: Description.
+
+        Returns:
+            object: Description.
         """
         if parent_level <= self.min_level:
             # terminal: cannot zoom further
@@ -382,12 +502,23 @@ class DynamicPatchEnv:
 
         return True, [r_stop, r_zoom]
 
+    # ---------------------------------------------------------------------------
+    # infer_zoom_decision
+    # ---------------------------------------------------------------------------
     def infer_zoom_decision(self, s_stop, s_zoom):
         """
         Infer a STOP vs ZOOM decision from precomputed scores.
 
         This delegates the decision logic to the configured patch
         scoring module and is typically used for greedy inference.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
         """
         return self.patch_score_module.infer(s_stop, s_zoom)
 
@@ -400,6 +531,16 @@ class DynamicPatchEnv:
 
         This method is intended for inference and visualization pipelines
         where state construction is required independently of RL dynamics.
+
+        Args:
+            self: Description.
+            patch: Description.
+            lvl: Description.
+            x: Description.
+            y: Description.
+
+        Returns:
+            object: Description.
         """
         if lvl is not None:
             self.curr_level = lvl
@@ -431,6 +572,12 @@ class DynamicPatchEnv:
         Reset the environment at the beginning of a new episode.
 
         This method is exception-safe and guarantees a valid initial state.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
         """
         self.steps = 0
         self.zoom_count = 0
@@ -455,6 +602,13 @@ class DynamicPatchEnv:
 
         Any failure during patch access or scoring results in a soft
         episode termination with a negative reward.
+
+        Args:
+            self: Description.
+            action: Description.
+
+        Returns:
+            object: Description.
         """
         try:
             return self._step_impl(action)
@@ -463,6 +617,9 @@ class DynamicPatchEnv:
             print(f"[ENV STEP WARNING #{self.env_error_count}] {e}")
             return self._blank_state(), -1.0, True, {"type": "env_failure"}
 
+    # ---------------------------------------------------------------------------
+    # _step_impl
+    # ---------------------------------------------------------------------------
     def _step_impl(self, action):
         """
         Internal step logic implementing STOP vs ZOOM transitions.
@@ -473,6 +630,13 @@ class DynamicPatchEnv:
         2. Relative preference (zoom vs stop) is delegated to PatchScoreModule
         3. ZOOM cost is NOT baked into reward (handled externally by RL)
         4. Transition stochasticity is minimized
+
+        Args:
+            self: Description.
+            action: Description.
+
+        Returns:
+            object: Description.
         """
 
         done = False
@@ -617,6 +781,6 @@ class DynamicPatchEnv:
         # ---------------------------------------------------------
         # 6. Final reward normalization (optional but consistent)
         # ---------------------------------------------------------
-        reward = float(np.clip(reward, -1.0, 1.0))
+        # reward = float(np.clip(reward, -1.0, 1.0))
 
         return next_state, reward, done, info

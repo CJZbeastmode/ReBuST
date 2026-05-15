@@ -33,6 +33,7 @@ class WSIEmbeddingDataset(Dataset):
     def __len__(self) -> int:
         return len(self.items)
 
+    # Coerce value to a float32 tensor of the requested rank
     @staticmethod
     def _to_tensor(value: object, dim: int) -> Optional[torch.Tensor]:
         if value is None:
@@ -49,6 +50,7 @@ class WSIEmbeddingDataset(Dataset):
             return None
         return value
 
+    # Subsample patch indices according to max_patches_per_wsi and patch_sample_mode
     def _sample_indices(self, n: int, case_id: str) -> np.ndarray:
         if self.max_patches_per_wsi <= 0 or n <= self.max_patches_per_wsi:
             return np.arange(n, dtype=np.int64)
@@ -67,6 +69,7 @@ class WSIEmbeddingDataset(Dataset):
         return np.unique(idx.round().astype(np.int64))
 
     def __getitem__(self, idx: int) -> Dict:
+        # Load PT file
         item = self.items[idx]
         pt_path = os.path.join(self.embeddings_dir, f"{item.case_id}.pt")
         loaded = torch.load(pt_path, map_location="cpu")
@@ -90,6 +93,7 @@ class WSIEmbeddingDataset(Dataset):
         if coords.shape[0] != n:
             coords = torch.zeros(n, 3, dtype=torch.float32)
 
+        # Sample patch subset
         chosen_idx = self._sample_indices(n, item.case_id)
         embeddings = embeddings[chosen_idx]
         coords = coords[chosen_idx]
@@ -103,11 +107,15 @@ class WSIEmbeddingDataset(Dataset):
         }
 
 
+# Pass-through collate — each WSI has a different patch count so batching is deferred
 def collate_wsi_batch(batch: List[Dict]) -> List[Dict]:
     return batch
 
 
-def build_items_from_pt_labels(embeddings_dir: str) -> Tuple[List[WSIItem], Dict[str, int]]:
+# Build WSIItem list and label map by scanning .pt labels in embeddings_dir
+def build_items_from_pt_labels(
+    embeddings_dir: str,
+) -> Tuple[List[WSIItem], Dict[str, int]]:
     files = [
         f
         for f in sorted(os.listdir(embeddings_dir))
@@ -130,7 +138,9 @@ def build_items_from_pt_labels(embeddings_dir: str) -> Tuple[List[WSIItem], Dict
             continue
 
     if not labels_by_case:
-        raise ValueError(f"No usable 'label' field found in PT files under {embeddings_dir}.")
+        raise ValueError(
+            f"No usable 'label' field found in PT files under {embeddings_dir}."
+        )
 
     labels = sorted(set(labels_by_case.values()))
     label_map = {name: i for i, name in enumerate(labels)}
@@ -141,6 +151,7 @@ def build_items_from_pt_labels(embeddings_dir: str) -> Tuple[List[WSIItem], Dict
     return items, label_map
 
 
+# Build WSIItem list from .pt files using a pre-existing label map (e.g. from train split)
 def build_items_from_pt_labels_with_map(
     embeddings_dir: str,
     label_map: Dict[str, int],
@@ -181,6 +192,8 @@ def build_items_from_pt_labels_with_map(
         )
 
     if not items:
-        raise ValueError(f"No usable samples found in {embeddings_dir} with provided label_map.")
+        raise ValueError(
+            f"No usable samples found in {embeddings_dir} with provided label_map."
+        )
 
     return items

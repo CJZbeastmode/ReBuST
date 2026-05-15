@@ -100,7 +100,9 @@ def _infer_root_only(
     return kept, discarded
 
 
-def _to_patch_dict(items: List[Tuple[object, Dict]]) -> Dict[Tuple[int, int, int], Dict]:
+def _to_patch_dict(
+    items: List[Tuple[object, Dict]]
+) -> Dict[Tuple[int, int, int], Dict]:
     out: Dict[Tuple[int, int, int], Dict] = {}
     for _patch, meta in items:
         key = (int(meta["level"]), int(meta["x"]), int(meta["y"]))
@@ -220,7 +222,9 @@ def main(args) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Unified supervised preprocessing pipeline")
+    parser = argparse.ArgumentParser(
+        description="Unified supervised preprocessing pipeline"
+    )
     parser.add_argument("--images-dir", default=DEFAULT_IMAGES_DIR)
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--model", default=DEFAULT_SCORE_MODEL)
@@ -239,7 +243,10 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    if args.model == DEFAULT_SCORE_MODEL and args.supervised_model_type == "zoom_regressor":
+    if (
+        args.model == DEFAULT_SCORE_MODEL
+        and args.supervised_model_type == "zoom_regressor"
+    ):
         args.model = DEFAULT_ZOOM_MODEL
 
     main(args)

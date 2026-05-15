@@ -191,7 +191,7 @@ def select_humbe_a2c(
     """HUMBE followed by A2C refinement (production variant)."""
     from src.global_budget_enforcer.HUMBE import humbe
     from src.utils.patch_scores import PATCH_SCORE_MODULES
-    from src.inference.a2c.infer_rl_a2c import infer_wsi_a2c
+    from src.inference.rl.a2c.infer_rl_a2c import infer_wsi_a2c
 
     score_module = PATCH_SCORE_MODULES[score_key]()
     wsi = humbe(
@@ -211,7 +211,7 @@ def select_a2c(
     **kwargs,
 ) -> list:
     """Standalone A2C patch selection (no HUMBE pre-filtering)."""
-    from src.inference.a2c.infer_rl_a2c import infer_wsi_a2c
+    from src.inference.rl.a2c.infer_rl_a2c import infer_wsi_a2c
 
     wsi = infer_wsi_a2c(
         wsi,
@@ -228,7 +228,7 @@ def select_greedy(
     **kwargs,
 ) -> list:
     """Greedy information-gain patch selection."""
-    from src.inference.greedy.greedy_infer_score_demo import greedy_infer_zoom
+    from src.inference.greedy.greedy_infer import greedy_infer_zoom
     from src.utils.dynamic_patch_env import DynamicPatchEnv
 
     env = DynamicPatchEnv(wsi, patch_score="text_align_score")
@@ -267,7 +267,7 @@ def select_supervised_regressor(
     **kwargs,
 ) -> list:
     """Supervised score-regressor patch selection."""
-    from src.inference.supervised_score_regressor_infer import (
+    from src.inference.supervised.supervised_score_regressor_infer import (
         greedy_infer_zoom_regressor,
     )
     from src.utils.dynamic_patch_env import DynamicPatchEnv
@@ -297,7 +297,7 @@ def select_supervised_zoom(
     **kwargs,
 ) -> list:
     """Supervised zoom-classifier patch selection."""
-    from src.inference.supervised_zoom_classifier_infer import (
+    from src.inference.supervised.supervised_zoom_classifier_infer import (
         greedy_infer_zoom_regressor,
     )
     from src.utils.dynamic_patch_env import DynamicPatchEnv

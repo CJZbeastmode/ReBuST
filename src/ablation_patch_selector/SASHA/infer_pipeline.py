@@ -25,6 +25,7 @@ from src.ablation_patch_selector.SASHA.data import read_label_from_path
 from src.ablation_patch_selector.SASHA.models import HAFEDClassifier, SashaPolicyValue
 
 
+# Safely coerce to float, returning nan on failure
 def _safe_float(value: float) -> float:
     try:
         return float(value)
@@ -32,7 +33,10 @@ def _safe_float(value: float) -> float:
         return float("nan")
 
 
-def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -> np.ndarray:
+# Compute per-class confusion matrix
+def _confusion_matrix(
+    labels: np.ndarray, preds: np.ndarray, num_classes: int
+) -> np.ndarray:
     mat = np.zeros((num_classes, num_classes), dtype=np.int64)
     for label, pred in zip(labels, preds):
         if 0 <= label < num_classes and 0 <= pred < num_classes:
@@ -40,6 +44,7 @@ def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -
     return mat
 
 
+# Compute classification metrics from labels, predictions, and probabilities
 def _classification_metrics(
     labels: np.ndarray, preds: np.ndarray, probs: np.ndarray, num_classes: int
 ) -> Dict[str, object]:
@@ -53,7 +58,9 @@ def _classification_metrics(
             "per_class_f1": [float("nan")] * num_classes,
             "per_class_accuracy_summary": [],
             "support": [0] * num_classes,
-            "confusion_matrix": np.zeros((num_classes, num_classes), dtype=np.int64).tolist(),
+            "confusion_matrix": np.zeros(
+                (num_classes, num_classes), dtype=np.int64
+            ).tolist(),
         }
 
     conf = _confusion_matrix(labels, preds, num_classes)
@@ -124,6 +131,7 @@ def _classification_metrics(
     }
 
 
+# Bootstrap resampling to estimate metric standard deviations
 def _bootstrap_metric_std(
     labels: np.ndarray,
     preds: np.ndarray,
@@ -166,6 +174,7 @@ def _bootstrap_metric_std(
     return out
 
 
+# List .pt files in a directory
 def list_pt_files(input_dir: str) -> List[Path]:
     base = Path(input_dir)
     if not base.exists() or not base.is_dir():
@@ -173,13 +182,17 @@ def list_pt_files(input_dir: str) -> List[Path]:
     files = [
         p
         for p in sorted(base.iterdir())
-        if p.is_file() and p.suffix.lower() == ".pt" and not p.name.startswith(".") and not p.name.startswith("._")
+        if p.is_file()
+        and p.suffix.lower() == ".pt"
+        and not p.name.startswith(".")
+        and not p.name.startswith("._")
     ]
     if not files:
         raise FileNotFoundError(f"No .pt files found in {input_dir}")
     return files
 
 
+# Load HAFED checkpoint and build model
 def load_hafed(hafed_path: str, device: torch.device) -> Tuple[HAFEDClassifier, Dict]:
     ckpt = torch.load(hafed_path, map_location=device)
     model = HAFEDClassifier(
@@ -193,7 +206,10 @@ def load_hafed(hafed_path: str, device: torch.device) -> Tuple[HAFEDClassifier, 
     return model, ckpt
 
 
-def load_policy(policy_path: str, device: torch.device) -> Tuple[SashaPolicyValue, Dict]:
+# Load selector policy checkpoint and build model
+def load_policy(
+    policy_path: str, device: torch.device
+) -> Tuple[SashaPolicyValue, Dict]:
     ckpt = torch.load(policy_path, map_location=device)
     model = SashaPolicyValue(
         embed_dim=int(ckpt.get("embed_dim", 512)),
@@ -204,6 +220,7 @@ def load_policy(policy_path: str, device: torch.device) -> Tuple[SashaPolicyValu
     return model, ckpt
 
 
+# Pick top-k candidate patches by HAFED attention score
 def pick_candidate_pool(
     embeddings: torch.Tensor,
     hafed: HAFEDClassifier,
@@ -226,6 +243,7 @@ def pick_candidate_pool(
     return embeddings[topi], topi
 
 
+# Run greedy selector on candidate patches, returning chosen indices
 def run_greedy_selector(
     candidates: torch.Tensor,
     policy: SashaPolicyValue,
@@ -241,7 +259,9 @@ def run_greedy_selector(
     global_context = candidates.mean(dim=0, keepdim=True).to(device)
 
     for step in range(max_steps):
-        step_frac = torch.tensor([[float(step) / max(1, max_steps)]], dtype=torch.float32, device=device)
+        step_frac = torch.tensor(
+            [[float(step) / max(1, max_steps)]], dtype=torch.float32, device=device
+        )
         with torch.no_grad():
             logits, _ = policy(
                 candidates.unsqueeze(0).to(device),
@@ -268,6 +288,7 @@ def run_greedy_selector(
     return chosen
 
 
+# Convert coord tensor to active_patches dict
 def coords_to_active_patches(coords: torch.Tensor) -> Dict[Tuple[int, int, int], Dict]:
     active: Dict[Tuple[int, int, int], Dict] = {}
     for row in coords:
@@ -280,6 +301,7 @@ def coords_to_active_patches(coords: torch.Tensor) -> Dict[Tuple[int, int, int],
     return active
 
 
+# Select patches for one WSI and compute prediction
 def process_one(
     src_path: Path,
     dst_path: Path | None,
@@ -336,7 +358,9 @@ def process_one(
         max_candidates=max_candidates,
         device=device,
     )
-    candidate_coords = coords[candidate_idx] if candidate_idx.numel() > 0 else torch.zeros(1, 3)
+    candidate_coords = (
+        coords[candidate_idx] if candidate_idx.numel() > 0 else torch.zeros(1, 3)
+    )
 
     chosen_local = run_greedy_selector(
         candidates=candidate_emb,
@@ -375,7 +399,9 @@ def process_one(
         torch.save(out_payload, dst_path)
 
     with torch.no_grad():
-        mask = torch.ones(1, selected_embeddings.shape[0], dtype=torch.bool, device=device)
+        mask = torch.ones(
+            1, selected_embeddings.shape[0], dtype=torch.bool, device=device
+        )
         logits, _, _ = hafed(selected_embeddings.unsqueeze(0).to(device), mask)
         probs = torch.softmax(logits, dim=-1).squeeze(0).detach().cpu().numpy()
         pred_idx = int(np.argmax(probs))
@@ -409,12 +435,26 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable saving selected patch .pt files",
     )
-    parser.add_argument("--input-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test", help="Directory with per-WSI .pt files containing test embeddings")
-    parser.add_argument("--hafed-checkpoint", default="data/models/ablation_patch_selector/sasha/best_hafed.pt")
-    parser.add_argument("--selector-checkpoint", default="data/models/ablation_patch_selector/sasha/best_selector.pt")
+    parser.add_argument(
+        "--input-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test",
+        help="Directory with per-WSI .pt files containing test embeddings",
+    )
+    parser.add_argument(
+        "--hafed-checkpoint",
+        default="data/models/ablation_patch_selector/sasha/best_hafed.pt",
+    )
+    parser.add_argument(
+        "--selector-checkpoint",
+        default="data/models/ablation_patch_selector/sasha/best_selector.pt",
+    )
     parser.add_argument("--out-json", default="data/benchmark/sasha.json")
-    parser.add_argument("--benchmark-output", dest="benchmark_output", action="store_true", default=True)
-    parser.add_argument("--no-benchmark-output", dest="benchmark_output", action="store_false")
+    parser.add_argument(
+        "--benchmark-output", dest="benchmark_output", action="store_true", default=True
+    )
+    parser.add_argument(
+        "--no-benchmark-output", dest="benchmark_output", action="store_false"
+    )
     parser.add_argument("--max-candidates", type=int, default=256)
     parser.add_argument("--max-steps", type=int, default=24)
     parser.add_argument(
@@ -435,6 +475,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    # Set up
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -447,6 +488,7 @@ def main() -> None:
     int_to_label = {int(v): str(k) for k, v in label_map.items()}
     policy, _policy_ckpt = load_policy(args.selector_checkpoint, device=device)
 
+    # Inference loop
     counts = {"ok": 0, "skipped": 0, "invalid": 0, "failed": 0}
     y_true: List[int] = []
     y_pred: List[int] = []
@@ -474,7 +516,11 @@ def main() -> None:
             status = str(result.get("status", "invalid"))
             counts[status] += 1
             true_label = result.get("true_label")
-            if true_label is not None and true_label in label_map and result.get("probs") is not None:
+            if (
+                true_label is not None
+                and true_label in label_map
+                and result.get("probs") is not None
+            ):
                 y_true.append(int(label_map[true_label]))
                 y_pred.append(int(result.get("pred_idx")))
                 y_prob.append(np.asarray(result.get("probs"), dtype=np.float32))
@@ -515,6 +561,7 @@ def main() -> None:
         f"failed={counts['failed']} total_time={total:.2f}s"
     )
 
+    # Compute metrics
     labels_np = np.asarray(y_true, dtype=np.int64)
     preds_np = np.asarray(y_pred, dtype=np.int64)
     probs_np = (

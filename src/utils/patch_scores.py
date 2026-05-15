@@ -1,8 +1,15 @@
 """
-Patch scoring modules used to guide zoom/stop decisions in WSI exploration.
-Each module implements a different heuristic for evaluating the desirability
-of zooming into child patches versus stopping at the current patch.
+Patch scoring modules
+=====================
+
+Heuristics for STOP vs ZOOM decisions during WSI exploration.
+Each module implements a different scoring strategy and is
+expected to be exception-safe (returning neutral scores on failure).
 """
+
+# ==========================================================================
+# Imports
+# ==========================================================================
 
 from torch.nn.functional import cosine_similarity
 from .embedder import Embedder
@@ -11,6 +18,11 @@ import cv2
 import json
 import os
 import torch
+
+
+# ==========================================================================
+# Base interface
+# ==========================================================================
 
 
 class PatchScoreModule:
@@ -23,24 +35,84 @@ class PatchScoreModule:
     - Scores are only comparable within the same module.
     """
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, **kwargs):
-        """Score for terminating exploration at the current patch."""
+        """
+        Score for terminating exploration at the current patch.
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         raise NotImplementedError
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, **kwargs):
-        """Score for zooming into child patches."""
+        """
+        Score for zooming into child patches.
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         raise NotImplementedError
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, **kwargs):
-        """Difference: zoom advantage over stop."""
+        """
+        Difference: zoom advantage over stop.
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         raise NotImplementedError
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, **kwargs):
-        """Deterministic action selection (0=STOP, 1=ZOOM)."""
+        """
+        Deterministic action selection (0=STOP, 1=ZOOM).
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         raise NotImplementedError
 
+    # ---------------------------------------------------------------------------
+    # rl_parameters
+    # ---------------------------------------------------------------------------
     def rl_parameters(self, **kwargs):
-        """Optional RL hyperparameter override."""
+        """
+        Optional RL hyperparameter override.
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         return NotImplementedError
 
 
@@ -52,7 +124,23 @@ class ImgSimScore(PatchScoreModule):
     Rewards dissimilarity between parent and children in embedding space.
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, weight=10.0, embedder=None, agg="mean", **kwargs):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            weight: Description.
+            embedder: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
         if agg not in ["mean", "max"]:
             raise ValueError(f"Invalid aggregation method: {agg}")
 
@@ -60,10 +148,38 @@ class ImgSimScore(PatchScoreModule):
         self.embedder = embedder
         self.agg = agg
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         # If no embedder or patches, return neutral score
         if parent_patch is None or not child_patches or self.embedder is None:
             return 0.0
@@ -101,7 +217,22 @@ class ImgSimScore(PatchScoreModule):
 
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             s_stop = self.compute_stop(parent_patch=parent_patch, **kwargs)
             s_zoom = self.compute_zoom(
@@ -114,7 +245,21 @@ class ImgSimScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             if s_stop <= 0 and s_zoom <= 0:
                 return 0
@@ -122,7 +267,19 @@ class ImgSimScore(PatchScoreModule):
         except Exception:
             return 0
 
+    # ---------------------------------------------------------------------------
+    # rl_parameters
+    # ---------------------------------------------------------------------------
     def rl_parameters(self):
+        """
+        rl_parameters.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
+        """
         return {
             "ZOOM_COST": 0.3,
             "DEPTH_COST": 0.05,
@@ -142,7 +299,24 @@ class TextAlignScore(PatchScoreModule):
     Uses vision-language similarity to score semantic relevance.
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, weight=1.0, embedder=None, k=3, agg="mean", **kwargs):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            weight: Description.
+            embedder: Description.
+            k: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
         if agg not in ["mean", "max"]:
             raise ValueError(f"Invalid aggregation method: {agg}")
 
@@ -151,7 +325,21 @@ class TextAlignScore(PatchScoreModule):
         self.k = k
         self.agg = agg
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None or self.embedder is None:
             return 0.0
         try:
@@ -160,7 +348,22 @@ class TextAlignScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         # If no embedder or child patches, return neutral score
         if not child_patches or self.embedder is None:
             return 0.0
@@ -186,7 +389,22 @@ class TextAlignScore(PatchScoreModule):
 
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             s_stop = self.compute_stop(parent_patch=parent_patch, **kwargs)
             s_zoom = self.compute_zoom(
@@ -199,13 +417,39 @@ class TextAlignScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return 1 if (s_zoom >= s_stop) else 0
         except Exception:
             return 0
 
+    # ---------------------------------------------------------------------------
+    # rl_parameters
+    # ---------------------------------------------------------------------------
     def rl_parameters(self):
+        """
+        rl_parameters.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
+        """
         return {
             "ZOOM_COST": 2.0,
             "DEPTH_COST": 0.1,
@@ -225,7 +469,23 @@ class TissuePresenceScore(PatchScoreModule):
     Binary reward for detecting non-blank tissue.
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, weight=1.0, blank_thr=230, agg="any", **kwargs):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            weight: Description.
+            blank_thr: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
         if agg not in ["any", "all"]:
             raise ValueError(f"Invalid aggregation method: {agg}")
 
@@ -233,14 +493,40 @@ class TissuePresenceScore(PatchScoreModule):
         self.blank_thr = blank_thr
         self.agg = agg
 
+    # ---------------------------------------------------------------------------
+    # _is_blank
+    # ---------------------------------------------------------------------------
     def _is_blank(self, patch):
-        """Heuristic blank detection via mean pixel intensity."""
+        """
+        Heuristic blank detection via mean pixel intensity.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return np.array(patch).mean() > self.blank_thr
         except Exception:
             return True
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None:
             return 0.0
         try:
@@ -248,7 +534,22 @@ class TissuePresenceScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if not child_patches:
             return 0.0
 
@@ -270,7 +571,22 @@ class TissuePresenceScore(PatchScoreModule):
 
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return self.compute_zoom(
                 parent_patch=parent_patch,
@@ -281,13 +597,39 @@ class TissuePresenceScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return 1 if (s_zoom > s_stop) else 0
         except Exception:
             return 0
 
+    # ---------------------------------------------------------------------------
+    # rl_parameters
+    # ---------------------------------------------------------------------------
     def rl_parameters(self):
+        """
+        rl_parameters.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
+        """
         return {
             "ZOOM_COST": 0.2,
             "DEPTH_COST": 0.05,
@@ -307,20 +649,63 @@ class TissuePresencePenalty(PatchScoreModule):
     Same as above but penalizes blank regions explicitly.
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, weight=1.0, blank_thr=230, agg="any", **kwargs):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            weight: Description.
+            blank_thr: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
         if agg not in ["any", "all"]:
             raise ValueError(f"Invalid aggregation method: {agg}")
         self.weight = weight
         self.blank_thr = blank_thr
         self.agg = agg
 
+    # ---------------------------------------------------------------------------
+    # _is_blank
+    # ---------------------------------------------------------------------------
     def _is_blank(self, patch):
+        """
+        _is_blank.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return np.array(patch).mean() > self.blank_thr
         except Exception:
             return True
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None:
             return 0.0
         try:
@@ -328,7 +713,22 @@ class TissuePresencePenalty(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if not child_patches:
             return 0.0
 
@@ -350,7 +750,22 @@ class TissuePresencePenalty(PatchScoreModule):
 
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return self.compute_zoom(
                 parent_patch=parent_patch,
@@ -361,13 +776,39 @@ class TissuePresencePenalty(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             return 1 if (s_zoom > s_stop) else 0
         except Exception:
             return 0
 
+    # ---------------------------------------------------------------------------
+    # rl_parameters
+    # ---------------------------------------------------------------------------
     def rl_parameters(self):
+        """
+        rl_parameters.
+
+        Args:
+            self: Description.
+
+        Returns:
+            object: Description.
+        """
         return {
             "ZOOM_COST": 0.2,
             "DEPTH_COST": 0.05,
@@ -387,15 +828,43 @@ class EntropyScore(PatchScoreModule):
     Rewards increases in grayscale entropy.
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, weight=1.0, agg="max", tau=0.01, **kwargs):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            weight: Description.
+            agg: Description.
+            tau: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
         if agg not in ["mean", "max"]:
             raise ValueError(f"Invalid aggregation method: {agg}")
         self.weight = weight
         self.agg = agg
         self.tau = tau  # relative entropy gain threshold
 
+    # ---------------------------------------------------------------------------
+    # _entropy
+    # ---------------------------------------------------------------------------
     def _entropy(self, img_np):
-        """Compute Shannon entropy of grayscale intensity distribution."""
+        """
+        Compute Shannon entropy of grayscale intensity distribution.
+
+        Args:
+            self: Description.
+            img_np: Description.
+
+        Returns:
+            object: Description.
+        """
         if img_np is None:
             return 0.0
 
@@ -416,12 +885,41 @@ class EntropyScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_stop
+    # ---------------------------------------------------------------------------
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None:
             return 0.0
         return self.weight * self._entropy(np.array(parent_patch))
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if not child_patches:
             return 0.0
 
@@ -441,7 +939,22 @@ class EntropyScore(PatchScoreModule):
 
         return 0.0
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         s_stop = self.compute_stop(parent_patch=parent_patch)
         if s_stop <= 0:
             return 0.0
@@ -452,12 +965,26 @@ class EntropyScore(PatchScoreModule):
         )
 
         # Relative entropy gain
-        return (s_zoom - s_stop) / (s_stop + 1e-6)
+        return s_zoom - s_stop
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         if s_stop <= 0:
             return 0
-        diff = (s_zoom - s_stop) / (s_stop + 1e-6)
+        diff = s_zoom - s_stop
         return 1 if diff >= self.tau else 0
 
 
@@ -481,6 +1008,9 @@ class CancerTypeCentroidScore(PatchScoreModule):
         "microscopy image of {kw}",
     ]
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(
         self,
         cancer_type: str,
@@ -489,6 +1019,21 @@ class CancerTypeCentroidScore(PatchScoreModule):
         agg: str = "mean",
         **kwargs,
     ):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            cancer_type: Description.
+            weight: Description.
+            embedder: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
+
         if agg not in ("mean", "max"):
             raise ValueError(
                 f"CancerTypeCentroidScore: invalid aggregation '{agg}', choose 'mean' or 'max'."
@@ -503,7 +1048,15 @@ class CancerTypeCentroidScore(PatchScoreModule):
     # Centroid construction
     # ------------------------------------------------------------------
     def _build_centroid(self) -> torch.Tensor:
-        """Load keyword JSON, encode all prompts with PLIP, return mean unit vector."""
+        """
+        Load keyword JSON, encode all prompts with PLIP, return mean unit vector.
+
+        Args:
+            self: Description.
+
+        Returns:
+            torch.Tensor: Description.
+        """
         kw_path = os.path.join(self.KEYWORD_DIR, f"{self.cancer_type}.json")
         if not os.path.isfile(kw_path):
             raise FileNotFoundError(
@@ -536,7 +1089,19 @@ class CancerTypeCentroidScore(PatchScoreModule):
         centroid = centroid / (centroid.norm() + 1e-12)
         return centroid.cpu()
 
+    # ---------------------------------------------------------------------------
+    # _get_centroid
+    # ---------------------------------------------------------------------------
     def _get_centroid(self) -> torch.Tensor:
+        """
+        _get_centroid.
+
+        Args:
+            self: Description.
+
+        Returns:
+            torch.Tensor: Description.
+        """
         if self._centroid is None:
             self._centroid = self._build_centroid()
         return self._centroid
@@ -546,7 +1111,16 @@ class CancerTypeCentroidScore(PatchScoreModule):
     # ------------------------------------------------------------------
 
     def _cos_sim(self, patch) -> float:
-        """Cosine similarity between a patch (or tensor) and the centroid."""
+        """
+        Cosine similarity between a patch (or tensor) and the centroid.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            float: Description.
+        """
         try:
             emb = (
                 patch
@@ -564,11 +1138,37 @@ class CancerTypeCentroidScore(PatchScoreModule):
     # PatchScoreModule interface
     # ------------------------------------------------------------------
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None:
             return 0.0
         return self.weight * self._cos_sim(parent_patch)
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if not child_patches:
             return 0.0
 
@@ -587,7 +1187,22 @@ class CancerTypeCentroidScore(PatchScoreModule):
         )
         return self.weight * agg_score
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             s_stop = self.compute_stop(parent_patch=parent_patch)
             s_zoom = self.compute_zoom(child_patches=child_patches)
@@ -595,7 +1210,21 @@ class CancerTypeCentroidScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         return 1 if s_zoom > s_stop else 0
 
 
@@ -660,6 +1289,9 @@ class ContrastiveTextScore(PatchScoreModule):
       exhaustive→ neg_cancer_types="all"              (every other keyword file)
     """
 
+    # ---------------------------------------------------------------------------
+    # _resolve_neg_types
+    # ---------------------------------------------------------------------------
     @staticmethod
     def _resolve_neg_types(pos_cancer_type: str, neg_cancer_types) -> list:
         """
@@ -672,6 +1304,13 @@ class ContrastiveTextScore(PatchScoreModule):
                    all listed types have keyword files; otherwise falls back
                    to 'all' (with a warning printed to stdout).
         list    →  used as-is (caller's responsibility for correctness).
+
+        Args:
+            pos_cancer_type: Description.
+            neg_cancer_types: Description.
+
+        Returns:
+            list: Description.
         """
         kw_dir = CancerTypeCentroidScore.KEYWORD_DIR
         # Enumerate all available cancer types once
@@ -722,6 +1361,9 @@ class ContrastiveTextScore(PatchScoreModule):
             )
         return resolved
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(
         self,
         pos_cancer_type: str,
@@ -731,6 +1373,22 @@ class ContrastiveTextScore(PatchScoreModule):
         agg: str = "mean",
         **kwargs,
     ):
+        """
+        __init__.
+
+        Args:
+            self: Description.
+            pos_cancer_type: Description.
+            neg_cancer_types: Description.
+            weight: Description.
+            embedder: Description.
+            agg: Description.
+            **kwargs: Description.
+
+        Returns:
+            None: Description.
+        """
+
         if agg not in ("mean", "max"):
             raise ValueError(
                 f"ContrastiveTextScore: invalid agg '{agg}', choose 'mean' or 'max'."
@@ -763,6 +1421,13 @@ class ContrastiveTextScore(PatchScoreModule):
         cos(e, c_pos) - max_j cos(e, c_neg_j)
 
         Can be negative when the patch looks more like a negative class.
+
+        Args:
+            self: Description.
+            patch: Description.
+
+        Returns:
+            float: Description.
         """
         try:
             emb = (
@@ -797,11 +1462,37 @@ class ContrastiveTextScore(PatchScoreModule):
     # ------------------------------------------------------------------
 
     def compute_stop(self, parent_patch=None, **kwargs):
+        """
+        compute_stop.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if parent_patch is None:
             return 0.0
         return self.weight * self._contrastive_score(parent_patch)
 
+    # ---------------------------------------------------------------------------
+    # compute_zoom
+    # ---------------------------------------------------------------------------
     def compute_zoom(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_zoom.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         if not child_patches:
             return 0.0
 
@@ -820,7 +1511,22 @@ class ContrastiveTextScore(PatchScoreModule):
         )
         return self.weight * agg_score
 
+    # ---------------------------------------------------------------------------
+    # compute_diff
+    # ---------------------------------------------------------------------------
     def compute_diff(self, parent_patch=None, child_patches=None, **kwargs):
+        """
+        compute_diff.
+
+        Args:
+            self: Description.
+            parent_patch: Description.
+            child_patches: Description.
+            **kwargs: Description.
+
+        Returns:
+            object: Description.
+        """
         try:
             s_stop = self.compute_stop(parent_patch=parent_patch)
             s_zoom = self.compute_zoom(child_patches=child_patches)
@@ -828,7 +1534,21 @@ class ContrastiveTextScore(PatchScoreModule):
         except Exception:
             return 0.0
 
+    # ---------------------------------------------------------------------------
+    # infer
+    # ---------------------------------------------------------------------------
     def infer(self, s_stop, s_zoom):
+        """
+        infer.
+
+        Args:
+            self: Description.
+            s_stop: Description.
+            s_zoom: Description.
+
+        Returns:
+            object: Description.
+        """
         return 1 if s_zoom > s_stop else 0
 
 

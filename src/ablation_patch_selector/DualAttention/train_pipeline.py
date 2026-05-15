@@ -47,6 +47,7 @@ class EpisodeRollout:
     chosen_indices: List[int]
 
 
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -54,6 +55,7 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
+# Safely coerce to float, returning nan on failure
 def _safe_float(value: float) -> float:
     try:
         return float(value)
@@ -61,7 +63,10 @@ def _safe_float(value: float) -> float:
         return float("nan")
 
 
-def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+# Compute aggregate classification metrics
+def _compute_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray
+) -> Dict[str, float]:
     metrics = {
         "accuracy": _safe_float((y_true == y_pred).mean() if len(y_true) > 0 else 0.0),
         "f1": float("nan"),
@@ -75,7 +80,9 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray)
     try:
         from sklearn.metrics import f1_score, roc_auc_score
 
-        metrics["f1"] = _safe_float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+        metrics["f1"] = _safe_float(
+            f1_score(y_true, y_pred, average="macro", zero_division=0)
+        )
         if y_prob.ndim == 2 and y_prob.size > 0:
             num_classes = int(y_prob.shape[1])
             if num_classes == 2:
@@ -90,22 +97,32 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray)
     return metrics
 
 
+# Entropy of attention distribution
 def _entropy(attn: torch.Tensor) -> torch.Tensor:
     attn = attn.clamp(min=1e-8)
     return -(attn * attn.log()).sum()
 
 
+# Pad or trim coords to coord_dim
 def _prepare_coords(coords: torch.Tensor, coord_dim: int) -> torch.Tensor:
     if coords is None or coords.numel() == 0:
-        return torch.zeros(0, coord_dim, device=coords.device if coords is not None else None)
+        return torch.zeros(
+            0, coord_dim, device=coords.device if coords is not None else None
+        )
     if coords.dim() == 1:
         coords = coords.unsqueeze(0)
     if coords.shape[1] >= coord_dim:
         return coords[:, -coord_dim:]
-    pad = torch.zeros(coords.shape[0], coord_dim - coords.shape[1], device=coords.device, dtype=coords.dtype)
+    pad = torch.zeros(
+        coords.shape[0],
+        coord_dim - coords.shape[1],
+        device=coords.device,
+        dtype=coords.dtype,
+    )
     return torch.cat([coords, pad], dim=1)
 
 
+# Run one sampled REINFORCE episode with the hard attention policy
 def _run_hard_attention_episode(
     hard_model: RazaHardAttention,
     candidate_embeddings: torch.Tensor,
@@ -178,7 +195,9 @@ def _run_hard_attention_episode(
         entropy_loss = torch.tensor(0.0, device=device)
 
     if rollout.chosen_indices:
-        chosen_coords = candidate_coords[torch.tensor(rollout.chosen_indices, device=device)]
+        chosen_coords = candidate_coords[
+            torch.tensor(rollout.chosen_indices, device=device)
+        ]
     else:
         chosen_coords = candidate_coords[:0]
 
@@ -188,6 +207,7 @@ def _run_hard_attention_episode(
     return logits, hard_loss, rollout, reward, dist_penalty
 
 
+# Greedy deterministic rollout for evaluation
 def _predict_greedy(
     hard_model: RazaHardAttention,
     candidate_embeddings: torch.Tensor,
@@ -233,7 +253,10 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    items, label_map = build_items_and_label_map(args.train_embeddings_dir, input_format=args.input_format)
+    # ---------------- Load data ----------------
+    items, label_map = build_items_and_label_map(
+        args.train_embeddings_dir, input_format=args.input_format
+    )
     train_items = items
     val_items = build_items_with_label_map(
         args.val_embeddings_dir,
@@ -255,24 +278,47 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
         sample_seed=args.seed,
     )
 
+    # === Imbalance: WeightedRandomSampler + logit adjustment ===
     train_labels = [int(item[2]) for item in train_items]
-    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(np.float32)
+    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(
+        np.float32
+    )
     class_counts[class_counts == 0.0] = 1.0
-    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(np.float32)
-    sample_weights = torch.tensor([class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32)
-    train_sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(
+        np.float32
+    )
+    sample_weights = torch.tensor(
+        [class_weights_arr[int(item[2])] for item in train_items], dtype=torch.float32
+    )
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights, num_samples=len(sample_weights), replacement=True
+    )
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=False, sampler=train_sampler, collate_fn=collate_samples)
-    val_loader = DataLoader(val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples)
+    # ---------------- Data & loaders ----------------
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        sampler=train_sampler,
+        collate_fn=collate_samples,
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=1, shuffle=False, collate_fn=collate_samples
+    )
 
-    soft_model = SoftAttentionEmbedding(embed_dim=args.embed_dim, hidden_dim=args.soft_hidden_dim).to(device)
+    # ---------------- Model ----------------
+    soft_model = SoftAttentionEmbedding(
+        embed_dim=args.embed_dim, hidden_dim=args.soft_hidden_dim
+    ).to(device)
     hard_model = RazaHardAttention(
         embed_dim=args.embed_dim,
         coord_dim=args.coord_dim,
         hidden_dim=args.hard_hidden_dim,
         num_classes=len(label_map),
     ).to(device)
-    hard_model.set_logit_adjustment(torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau)
+    hard_model.set_logit_adjustment(
+        torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau
+    )
 
     params = list(soft_model.parameters()) + list(hard_model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
@@ -281,6 +327,7 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
     best_path = None
     history: List[Dict[str, float]] = []
 
+    # ---------------- Training loop ----------------
     for epoch in range(args.epochs):
         soft_model.train()
         hard_model.train()
@@ -322,7 +369,7 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
                     policy_entropy_weight=args.policy_entropy_weight,
                 )
 
-                soft_weight = args.soft_weight * (args.soft_decay ** epoch)
+                soft_weight = args.soft_weight * (args.soft_decay**epoch)
                 loss = hard_loss + soft_weight * soft_loss
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(params, args.grad_clip)
@@ -370,6 +417,7 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
                 f"val_acc={val_metrics.get('accuracy', 0.0):.4f}"
             )
 
+    # ---------------- Save & report ----------------
     history_path = str(Path(args.out_dir) / "train_history.json")
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
@@ -382,6 +430,7 @@ def train_raza(args: argparse.Namespace) -> Dict[str, object]:
     }
 
 
+# Evaluate soft + hard model on a loader
 def evaluate_raza(
     soft_model: SoftAttentionEmbedding,
     hard_model: RazaHardAttention,
@@ -437,9 +486,19 @@ def evaluate_raza(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train Raza dual attention model")
 
-    parser.add_argument("--train-embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/train", help="Directory with per-WSI .pt files containing training embeddings")
-    parser.add_argument("--val-embeddings-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/val", help="Directory with per-WSI .pt files containing validation embeddings")
-    parser.add_argument("--out-dir", default="data/models/ablation_patch_selector/dual_attention")
+    parser.add_argument(
+        "--train-embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/train",
+        help="Directory with per-WSI .pt files containing training embeddings",
+    )
+    parser.add_argument(
+        "--val-embeddings-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/val",
+        help="Directory with per-WSI .pt files containing validation embeddings",
+    )
+    parser.add_argument(
+        "--out-dir", default="data/models/ablation_patch_selector/dual_attention"
+    )
     parser.add_argument(
         "--input-format",
         type=str,
@@ -467,7 +526,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--soft-decay", type=float, default=0.98)
 
     parser.add_argument("--max-patches-per-wsi", type=int, default=0)
-    parser.add_argument("--patch-sample-mode", type=str, default="uniform", choices=["uniform", "random", "head"])
+    parser.add_argument(
+        "--patch-sample-mode",
+        type=str,
+        default="uniform",
+        choices=["uniform", "random", "head"],
+    )
 
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=1)
@@ -476,8 +540,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grad-clip", type=float, default=5.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-every", type=int, default=1)
-    parser.add_argument("--logit-adjust-tau", type=float, default=1.0,
-                        help="Logit adjustment tau (0 = disabled)")
+    parser.add_argument(
+        "--logit-adjust-tau",
+        type=float,
+        default=1.0,
+        help="Logit adjustment tau (0 = disabled)",
+    )
 
     return parser.parse_args()
 

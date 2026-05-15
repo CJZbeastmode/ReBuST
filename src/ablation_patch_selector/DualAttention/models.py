@@ -49,26 +49,31 @@ class RazaHardAttention(nn.Module):
         self.hidden_dim = int(hidden_dim)
         self.num_classes = int(num_classes)
 
+        # candidate feature MLP
         self.cand_mlp = nn.Sequential(
             nn.Linear(self.embed_dim + self.coord_dim, self.hidden_dim),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
         )
 
+        # context init MLP
         self.context_mlp = nn.Sequential(
             nn.Linear(self.embed_dim * 2 + self.coord_dim * 2, self.hidden_dim),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
         )
 
+        # glimpse update MLP
         self.glimpse_mlp = nn.Sequential(
             nn.Linear(self.embed_dim + self.coord_dim, self.hidden_dim),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
         )
 
+        # LSTM
         self.rnn = nn.LSTMCell(self.hidden_dim, self.hidden_dim)
 
+        # policy, value, and classifier heads
         self.policy_head = nn.Sequential(
             nn.Linear(self.hidden_dim * 2, self.hidden_dim),
             nn.Tanh(),
@@ -79,6 +84,7 @@ class RazaHardAttention(nn.Module):
         self.classifier = nn.Linear(self.hidden_dim, self.num_classes)
         self.register_buffer("logit_bias", torch.zeros(self.num_classes))
 
+    # Project embeddings and coords to candidate features
     def build_candidate_features(
         self,
         embeddings: torch.Tensor,
@@ -86,16 +92,22 @@ class RazaHardAttention(nn.Module):
     ) -> torch.Tensor:
         return self.cand_mlp(torch.cat([embeddings, coords], dim=-1))
 
-    def init_state(self, embeddings: torch.Tensor, coords: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    # Initialize LSTM state from mean/std of embeddings and coords
+    def init_state(
+        self, embeddings: torch.Tensor, coords: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         mean_embed = embeddings.mean(dim=1)
         std_embed = embeddings.std(dim=1)
         mean_coord = coords.mean(dim=1)
         std_coord = coords.std(dim=1)
-        context = self.context_mlp(torch.cat([mean_embed, std_embed, mean_coord, std_coord], dim=-1))
+        context = self.context_mlp(
+            torch.cat([mean_embed, std_embed, mean_coord, std_coord], dim=-1)
+        )
         h0 = context
         c0 = torch.zeros_like(h0)
         return h0, c0
 
+    # Compute policy logits over candidates from current hidden state
     def policy_logits(
         self,
         hidden: torch.Tensor,
@@ -104,10 +116,13 @@ class RazaHardAttention(nn.Module):
     ) -> torch.Tensor:
         batch_size, num_candidates, _ = candidate_features.shape
         hidden_expand = hidden.unsqueeze(1).expand(batch_size, num_candidates, -1)
-        logits = self.policy_head(torch.cat([candidate_features, hidden_expand], dim=-1)).squeeze(-1)
+        logits = self.policy_head(
+            torch.cat([candidate_features, hidden_expand], dim=-1)
+        ).squeeze(-1)
         logits = logits.masked_fill(selected_mask, torch.finfo(logits.dtype).min)
         return logits
 
+    # Advance LSTM state with one glimpse embedding and coords
     def step(
         self,
         hidden: torch.Tensor,
@@ -115,17 +130,22 @@ class RazaHardAttention(nn.Module):
         glimpse_embed: torch.Tensor,
         glimpse_coord: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        glimpse_feat = self.glimpse_mlp(torch.cat([glimpse_embed, glimpse_coord], dim=-1))
+        glimpse_feat = self.glimpse_mlp(
+            torch.cat([glimpse_embed, glimpse_coord], dim=-1)
+        )
         hidden, cell = self.rnn(glimpse_feat, (hidden, cell))
         return hidden, cell
 
+    # Set logit adjustment bias from class counts and tau
     def set_logit_adjustment(self, class_counts: torch.Tensor, tau: float) -> None:
         counts = class_counts.float().clamp(min=1.0)
         priors = counts / counts.sum()
         self.logit_bias = (-tau * torch.log(priors)).to(self.classifier.weight.device)
 
+    # Classify from final hidden state with logit adjustment
     def classify(self, hidden: torch.Tensor) -> torch.Tensor:
         return self.classifier(hidden) + self.logit_bias
 
+    # Value estimate from hidden state
     def value(self, hidden: torch.Tensor) -> torch.Tensor:
         return self.value_head(hidden).squeeze(-1)

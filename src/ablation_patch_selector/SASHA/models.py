@@ -50,6 +50,7 @@ class HAFEDClassifier(nn.Module):
         self.classifier = nn.Linear(self.hidden_dim, int(num_classes))
         self.register_buffer("logit_bias", torch.zeros(int(num_classes)))
 
+    # Set logit adjustment bias from class counts and tau
     def set_logit_adjustment(self, class_counts: torch.Tensor, tau: float) -> None:
         counts = class_counts.float().clamp(min=1.0)
         priors = counts / counts.sum()
@@ -135,7 +136,9 @@ class SashaPolicyValue(nn.Module):
         """
         batch_size, num_candidates, _ = candidate_embeddings.shape
 
-        global_expand = global_context.unsqueeze(1).expand(batch_size, num_candidates, -1)
+        global_expand = global_context.unsqueeze(1).expand(
+            batch_size, num_candidates, -1
+        )
         selected_flag = selected_mask.float().unsqueeze(-1)
         step_expand = step_frac.unsqueeze(1).expand(batch_size, num_candidates, -1)
 
@@ -146,7 +149,14 @@ class SashaPolicyValue(nn.Module):
         token_feat = self.token_mlp(token_input)
         token_logits = self.token_logit(token_feat).squeeze(-1)  # [B, N]
 
-        global_input = torch.cat([global_context, step_frac, selected_mask.float().mean(dim=1, keepdim=True)], dim=-1)
+        global_input = torch.cat(
+            [
+                global_context,
+                step_frac,
+                selected_mask.float().mean(dim=1, keepdim=True),
+            ],
+            dim=-1,
+        )
         global_feat = self.global_mlp(global_input)
         stop = self.stop_logit(global_feat).squeeze(-1).unsqueeze(1)  # [B,1]
         value = self.value_head(global_feat).squeeze(-1)

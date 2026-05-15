@@ -30,6 +30,7 @@ from archive.streaming_transformer_archive.streaming_transformer_v2.infer_stream
 )
 
 
+# List .pt files in a directory
 def list_pt_files(input_dir: str) -> List[Path]:
     base = Path(input_dir)
     if not base.exists() or not base.is_dir():
@@ -37,13 +38,17 @@ def list_pt_files(input_dir: str) -> List[Path]:
     files = [
         p
         for p in sorted(base.iterdir())
-        if p.is_file() and p.suffix.lower() == ".pt" and not p.name.startswith(".") and not p.name.startswith("._")
+        if p.is_file()
+        and p.suffix.lower() == ".pt"
+        and not p.name.startswith(".")
+        and not p.name.startswith("._")
     ]
     if not files:
         raise FileNotFoundError(f"No .pt files found in {input_dir}")
     return files
 
 
+# Safely coerce to float, returning nan on failure
 def _safe_float(v: float) -> float:
     try:
         return float(v)
@@ -51,7 +56,10 @@ def _safe_float(v: float) -> float:
         return float("nan")
 
 
-def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+# Compute aggregate classification metrics
+def _compute_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray
+) -> Dict[str, float]:
     metrics = {
         "accuracy": _safe_float((y_true == y_pred).mean() if len(y_true) > 0 else 0.0),
         "f1": float("nan"),
@@ -65,19 +73,24 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray)
     try:
         from sklearn.metrics import f1_score, roc_auc_score
 
-        metrics["f1"] = _safe_float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+        metrics["f1"] = _safe_float(
+            f1_score(y_true, y_pred, average="macro", zero_division=0)
+        )
         if y_prob.ndim == 2 and y_prob.size > 0:
             num_classes = int(y_prob.shape[1])
             if num_classes == 2:
                 metrics["auc"] = _safe_float(roc_auc_score(y_true, y_prob[:, 1]))
             elif num_classes > 2:
-                metrics["auc"] = _safe_float(roc_auc_score(y_true, y_prob, multi_class="ovr", average="macro"))
+                metrics["auc"] = _safe_float(
+                    roc_auc_score(y_true, y_prob, multi_class="ovr", average="macro")
+                )
     except Exception:
         pass
 
     return metrics
 
 
+# Evaluate SASHA selector + streaming classifier on test set
 def eval_sasha(
     test_dir: str,
     selector_path: str,
@@ -96,7 +109,9 @@ def eval_sasha(
         policy, _ = load_policy(selector_path, device=device)
 
     if policy is None:
-        print(f"[WARN] SASHA selector checkpoint missing: {selector_path}. Using top-k by L2 norm.")
+        print(
+            f"[WARN] SASHA selector checkpoint missing: {selector_path}. Using top-k by L2 norm."
+        )
 
     y_true: List[int] = []
     y_pred: List[int] = []
@@ -119,7 +134,11 @@ def eval_sasha(
         if candidates.shape[0] <= 0:
             continue
 
-        candidate_coords = coords[candidate_idx] if candidate_idx.numel() > 0 else coords[: candidates.shape[0]]
+        candidate_coords = (
+            coords[candidate_idx]
+            if candidate_idx.numel() > 0
+            else coords[: candidates.shape[0]]
+        )
 
         if policy is not None:
             chosen = run_greedy_selector(
@@ -158,10 +177,13 @@ def eval_sasha(
 
     y_true_np = np.asarray(y_true, dtype=np.int64)
     y_pred_np = np.asarray(y_pred, dtype=np.int64)
-    y_prob_np = np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    y_prob_np = (
+        np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    )
     return _compute_metrics(y_true_np, y_pred_np, y_prob_np), rows
 
 
+# Evaluate EvoPS + streaming classifier on test set
 def eval_evops(
     test_dir: str,
     device: torch.device,
@@ -196,7 +218,9 @@ def eval_evops(
         # Determine target class and fitness using the streaming transformer so
         # selection is optimised for the downstream classifier directly.
         with torch.no_grad():
-            full_out = predict_streaming_one(streaming_model, embeddings, coords, device)
+            full_out = predict_streaming_one(
+                streaming_model, embeddings, coords, device
+            )
         target_idx = int(full_out["pred"])
 
         def _streaming_fitness(indices: List[int]) -> float:
@@ -250,10 +274,13 @@ def eval_evops(
 
     y_true_np = np.asarray(y_true, dtype=np.int64)
     y_pred_np = np.asarray(y_pred, dtype=np.int64)
-    y_prob_np = np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    y_prob_np = (
+        np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    )
     return _compute_metrics(y_true_np, y_pred_np, y_prob_np), rows
 
 
+# Evaluate streaming MIL v2 on test set directly
 def eval_streaming_mil_v2(
     test_dir: str,
     checkpoint_path: str,
@@ -295,10 +322,13 @@ def eval_streaming_mil_v2(
 
     y_true_np = np.asarray(y_true, dtype=np.int64)
     y_pred_np = np.asarray(y_pred, dtype=np.int64)
-    y_prob_np = np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    y_prob_np = (
+        np.vstack(y_prob) if y_prob else np.zeros((0, len(label_map)), dtype=np.float32)
+    )
     return _compute_metrics(y_true_np, y_pred_np, y_prob_np), rows
 
 
+# Print markdown table of results
 def print_table(rows: List[Tuple[str, Dict[str, float]]]) -> None:
     print("| Method | Accuracy | AUC | F1 |")
     print("| --- | --- | --- | --- |")
@@ -309,6 +339,7 @@ def print_table(rows: List[Tuple[str, Dict[str, float]]]) -> None:
         print(f"| {name} | {acc:.4f} | {auc:.4f} | {f1:.4f} |")
 
 
+# Save results to CSV
 def save_csv(rows: List[Tuple[str, Dict[str, float]]], out_csv: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out_csv)), exist_ok=True)
     with open(out_csv, "w", newline="", encoding="utf-8") as fh:
@@ -328,10 +359,18 @@ def save_csv(rows: List[Tuple[str, Dict[str, float]]], out_csv: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark table for TCGA test set")
-    parser.add_argument("--test-dir", default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/test", help="Directory with per-WSI .pt files containing test embeddings")
-    parser.add_argument("--out-csv", default="data/benchmark/evops_sasha_streaming_tcga.csv")
+    parser.add_argument(
+        "--test-dir",
+        default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/a2c/test",
+        help="Directory with per-WSI .pt files containing test embeddings",
+    )
+    parser.add_argument(
+        "--out-csv", default="data/benchmark/evops_sasha_streaming_tcga.csv"
+    )
 
-    parser.add_argument("--sasha-selector", default="data/models/ablation/sasha/best_selector.pt")
+    parser.add_argument(
+        "--sasha-selector", default="data/models/ablation/sasha/best_selector.pt"
+    )
     parser.add_argument("--sasha-max-candidates", type=int, default=256)
     parser.add_argument("--sasha-max-steps", type=int, default=24)
     parser.add_argument("--sasha-selection-budget", type=int, default=32)
@@ -344,12 +383,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evops-crossover", type=float, default=0.7)
     parser.add_argument("--evops-seed", type=int, default=42)
 
-    parser.add_argument("--streaming-checkpoint", default="data/models/downstream_tasks/streaming_mil_v2/best_streaming_mil_v2.pt")
+    parser.add_argument(
+        "--streaming-checkpoint",
+        default="data/models/downstream_tasks/streaming_mil_v2/best_streaming_mil_v2.pt",
+    )
     parser.add_argument("--device", default="cpu")
     return parser.parse_args()
 
 
 def main() -> None:
+    # Set up
     args = parse_args()
     device = torch.device(args.device)
 
@@ -360,6 +403,7 @@ def main() -> None:
         device,
     )
 
+    # Evaluate methods
     sasha_metrics, _ = eval_sasha(
         test_dir=args.test_dir,
         selector_path=args.sasha_selector,
@@ -394,6 +438,7 @@ def main() -> None:
     )
     rows.append(("StreamingMILv2", streaming_metrics))
 
+    # Report
     print_table(rows)
     save_csv(rows, args.out_csv)
     print(f"[SAVED] {args.out_csv}")

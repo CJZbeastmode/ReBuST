@@ -145,8 +145,7 @@ class RareCohortDownloader:
                 selected[case_id] = project
 
             print(
-                f"  Selected {len(take)} cases "
-                f"(from {len(cases)} total with SVS)"
+                f"  Selected {len(take)} cases " f"(from {len(cases)} total with SVS)"
             )
 
         out_path = output_json if output_json is not None else self.output_json

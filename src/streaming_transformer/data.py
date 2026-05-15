@@ -1,4 +1,6 @@
-"""Module for data."""
+"""
+Module for data loading and processing for the streaming MIL transformer.
+"""
 
 import json
 import os
@@ -24,6 +26,9 @@ except ImportError:
     train_test_split = None
 
 
+# ---------------------------------------------------------------------------
+# Data structures and dataset
+# ---------------------------------------------------------------------------
 @dataclass
 class WSIItem:
     case_id: str
@@ -37,12 +42,24 @@ class WSIEmbeddingDataset(Dataset):
         embeddings_dir: str,
         images_dir: Optional[str] = None,
     ):
+        """
+        Initialize the WSIEmbeddingDataset.
+
+        Args:
+            items: Sequence of WSIItem objects containing case IDs and labels.
+            embeddings_dir: Directory where precomputed .pt embedding files are stored.
+            images_dir: Optional directory where original WSI images are stored (used if embeddings don't contain
+                        precomputed tensors). Each image file should be named as {case_id}.svs.
+        """
         self.items = list(items)
         self.embeddings_dir = embeddings_dir
         self.images_dir = images_dir
         self._embedder: Optional[Embedder] = None
 
     def __len__(self) -> int:
+        """
+        Return the number of items in the dataset.
+        """
         return len(self.items)
 
     @staticmethod
@@ -50,6 +67,16 @@ class WSIEmbeddingDataset(Dataset):
         embeddings: object,
         coords: object,
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Normalize and validate precomputed embeddings and coordinates from the loaded .pt file.
+
+        Args:
+            embeddings: Precomputed patch embeddings (expected to be convertible to a 2D tensor of shape [num_patches, embedding_dim]).
+            coords: Precomputed patch coordinates (expected to be convertible to a 2D tensor of shape [num_patches, 3]).
+
+        Returns:
+            A tuple of (embeddings_tensor, coords_tensor) if valid, or None if the precomputed data is not usable.
+        """
         if embeddings is None or coords is None:
             return None
 
@@ -76,10 +103,26 @@ class WSIEmbeddingDataset(Dataset):
         return embeddings, coords
 
     def __getitem__(self, idx: int) -> Dict:
+        """
+        Get the dataset item at the specified index.
+
+        Args:
+            idx: Index of the item to retrieve.
+
+        Returns:
+            A dictionary containing:
+                - 'case_id': The case ID of the WSI.
+                - 'label': The label associated with the WSI.
+                - 'embeddings': A tensor of shape [num_patches, embedding_dim] containing
+                                the patch embeddings.
+                - 'coords': A tensor of shape [num_patches, 3] containing the
+                            coordinates (level, x, y) of each patch.
+                - 'patch_count': The number of patches (derived from the embeddings).
+        """
+
+        # Load the item and corresponding .pt file
         item = self.items[idx]
-
         pt_path = os.path.join(self.embeddings_dir, f"{item.case_id}.pt")
-
         loaded = torch.load(pt_path, map_location="cpu")
 
         if not isinstance(loaded, dict):
@@ -87,6 +130,7 @@ class WSIEmbeddingDataset(Dataset):
                 f"Unsupported PT schema for {pt_path}. Expected dict payload."
             )
 
+        # Use precomputer embeddings or extract from active patches if not available
         precomputed = self._normalize_precomputed_tensors(
             embeddings=loaded.get("embeddings"),
             coords=loaded.get("coords"),
@@ -112,9 +156,24 @@ class WSIEmbeddingDataset(Dataset):
     def _extract_from_active_patches(
         self, case_id: str, loaded: Dict
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Extract patch embeddings and coordinates from the WSI based on the 'active_patches' field in the loaded .pt file.
+
+        Args:
+            case_id: The case ID of the WSI.
+            loaded: The loaded dictionary from the .pt file, expected to contain 'active_patches'
+                    and optionally 'img_path', 'multistage', and 'zoomed_patches'.
+
+        Returns:
+            A tuple of (embeddings_tensor, coords_tensor) extracted from the WSI. If
+            extraction fails, returns tensors of shape [1, embedding_dim] and [1, 3] filled with zeros.
+        """
+
+        # Get embedder
         if self._embedder is None:
             self._embedder = Embedder(img_backend="plip")
 
+        # Get image
         img_path = loaded.get("img_path")
         if (not img_path or not os.path.exists(img_path)) and self.images_dir:
             img_path = os.path.join(self.images_dir, f"{case_id}.svs")
@@ -122,6 +181,7 @@ class WSIEmbeddingDataset(Dataset):
         if not img_path or not os.path.exists(img_path):
             return torch.zeros(1, 512), torch.zeros(1, 3, dtype=torch.float32)
 
+        # Create WSI object and extract embeddings for active patches
         wsi = WSI(
             img_path,
             multistage=bool(loaded.get("multistage", False)),
@@ -130,12 +190,15 @@ class WSIEmbeddingDataset(Dataset):
         wsi.active_patches = loaded.get("active_patches", {})
         wsi.zoomed_patches = loaded.get("zoomed_patches", {})
 
+        # Initialize lists for embeddings and coordinates
         keys = self._extract_active_keys(loaded.get("active_patches", {}))
         embs: List[torch.Tensor] = []
         coords: List[torch.Tensor] = []
 
+        # Loop through active patch keys and extract embeddings and coordinates
         for lvl, x, y in keys:
             try:
+                # Get the patch from the WSI
                 patch = wsi.get_patch(lvl, x, y)
                 emb = wsi.get_emb(patch)
                 if isinstance(emb, torch.Tensor):
@@ -144,6 +207,7 @@ class WSIEmbeddingDataset(Dataset):
                     emb = torch.tensor(emb, dtype=torch.float32).view(-1)
                 if emb.numel() != 512:
                     continue
+                # Append the embedding and corresponding coordinates
                 embs.append(emb)
                 coords.append(
                     torch.tensor([float(lvl), float(x), float(y)], dtype=torch.float32)
@@ -151,6 +215,7 @@ class WSIEmbeddingDataset(Dataset):
             except Exception:
                 continue
 
+        # If no valid embeddings were extracted, return default tensors
         if not embs:
             return torch.zeros(1, 512), torch.zeros(1, 3, dtype=torch.float32)
 
@@ -158,6 +223,18 @@ class WSIEmbeddingDataset(Dataset):
 
     @staticmethod
     def _extract_active_keys(active_patches: object) -> List[Tuple[int, int, int]]:
+        """
+        Extract and sort active patch keys from the given active_patches structure.
+
+        Args:
+            active_patches: A structure containing active patch information, expected to be either a dict or
+                            a list of keys. Each key should be a tuple or list of (level, x, y).
+
+        Returns:
+            A sorted list of tuples (level, x, y) representing the active patch coordinates.
+        """
+
+        # Initialize keys and iterable
         keys: List[Tuple[int, int, int]] = []
 
         if isinstance(active_patches, dict):
@@ -167,6 +244,7 @@ class WSIEmbeddingDataset(Dataset):
         else:
             iterable = []
 
+        # Loop through the iterable and extract valid keys
         for key in iterable:
             if isinstance(key, tuple) and len(key) == 3:
                 lvl, x, y = key
@@ -179,11 +257,19 @@ class WSIEmbeddingDataset(Dataset):
             except Exception:
                 continue
 
+        # Sort keys by level, then y, then x for consistent ordering
         keys.sort(key=lambda k: (k[0], k[2], k[1]))
         return keys
 
 
 def collate_wsi_batch(batch: List[Dict]) -> List[Dict]:
+    """
+    Collate function for WSIEmbeddingDataset to be used with DataLoader.
+    Args:
+        batch: A list of dictionaries, each containing 'case_id', 'label', 'embeddings', 'coords', and 'patch_count'.
+    Returns:
+        A list of dictionaries with the same keys, where 'embeddings' and 'coords' are collated into lists of tensors.
+    """
     return batch
 
 
@@ -191,6 +277,20 @@ def build_items_from_labels_json(
     labels_json: str,
     embeddings_dir: str,
 ) -> Tuple[List[WSIItem], Dict[str, int]]:
+    """
+    Build WSIItem list and label map from a JSON file containing case IDs and labels.
+
+    Args:
+        labels_json: Path to a JSON file where keys are case IDs and values are labels.
+        embeddings_dir: Directory where precomputed .pt embedding files are stored.
+
+    Returns:
+        A tuple containing:
+            - A list of WSIItem objects for cases that have both a label in the JSON and a corresponding .pt file in the embeddings directory.
+            - A dictionary mapping original label strings to integer indices.
+    """
+
+    # Load labels from JSON
     with open(labels_json, "r") as fh:
         labels_map = json.load(fh)
 
@@ -207,6 +307,7 @@ def build_items_from_labels_json(
             f"No matching embedding files found in {embeddings_dir} for labels in {labels_json}."
         )
 
+    # Create label mapping and WSIItem list
     projects = sorted({labels_map[c] for c in available})
     proj_to_int = {project: idx for idx, project in enumerate(projects)}
 
@@ -214,6 +315,7 @@ def build_items_from_labels_json(
         WSIItem(case_id=case_id, label=proj_to_int[labels_map[case_id]])
         for case_id in sorted(available)
     ]
+
     return items, proj_to_int
 
 
@@ -261,6 +363,19 @@ def build_items_from_pt_labels_with_map(
     label_map: Dict[str, int],
     strict: bool = True,
 ) -> List[WSIItem]:
+    """
+    Build WSIItem list from .pt files in the embeddings directory using a provided label map.
+
+    Args:
+        embeddings_dir: Directory where precomputed .pt embedding files are stored.
+        label_map: A dictionary mapping original label strings to integer indices (derived from training data).
+        strict: If True, raises an error if any labels in the .pt files are not found in the label_map. If False, skips those samples and prints a warning.
+
+    Returns:
+        A list of WSIItem objects for cases that have both a label in the .pt files and a corresponding entry in the label_map.
+    """
+
+    # List .pt files in the embeddings directory
     files = [
         f
         for f in sorted(os.listdir(embeddings_dir))
@@ -270,10 +385,13 @@ def build_items_from_pt_labels_with_map(
     if not files:
         raise FileNotFoundError(f"No .pt files found in {embeddings_dir}")
 
+    # Initialize list for WSIItems and dictionary to track unknown labels
     items: List[WSIItem] = []
     unknown_labels: Dict[str, int] = {}
 
+    # Loop through files and build WSIItems based on the label_map
     for fname in files:
+        # Extract case_id from filename and load the .pt file
         case_id = os.path.splitext(fname)[0]
         pt_path = os.path.join(embeddings_dir, fname)
         try:
@@ -291,6 +409,7 @@ def build_items_from_pt_labels_with_map(
         except Exception:
             continue
 
+    # Validations
     if strict and unknown_labels:
         unknown = ", ".join(sorted(unknown_labels.keys()))
         raise ValueError(
@@ -313,10 +432,27 @@ def split_items(
     seed: int = 42,
     stratified: bool = True,
 ) -> Tuple[List[WSIItem], List[WSIItem], List[WSIItem]]:
+    """
+    Split a sequence of WSIItems into train, validation, and test sets.
+
+    Args:
+        items: A sequence of WSIItem objects to be split.
+        train_count: Desired number of items in the training set.
+        val_count: Desired number of items in the validation set.
+        test_count: Desired number of items in the test set.
+        seed: Random seed for reproducibility.
+        stratified: If True, performs a stratified split based on the labels. Requires sklearn
+                    to be installed. If False, performs a random split without stratification.
+
+    Returns:
+        A tuple of three lists: (train_items, val_items, test_items).
+    """
+
     items = list(items)
     n_items = len(items)
     requested = train_count + val_count + test_count
 
+    # Adjust counts proportionally if the requested total exceeds the number of available items
     if requested != n_items:
         if requested > n_items:
             raise ValueError(
@@ -330,6 +466,7 @@ def split_items(
     labels = [it.label for it in items]
 
     if stratified and train_test_split is not None:
+        # Use sklearn's train_test_split for stratified splitting
         idx = list(range(n_items))
         train_idx, temp_idx = train_test_split(
             idx,
@@ -338,6 +475,7 @@ def split_items(
             random_state=seed,
         )
 
+        # Further split the temp_idx into validation and test sets
         temp_labels = [labels[i] for i in temp_idx]
         val_fraction = val_count / max(val_count + test_count, 1)
         val_idx, test_idx = train_test_split(
@@ -347,11 +485,13 @@ def split_items(
             random_state=seed,
         )
 
+        # Prepare and return
         train_items = [items[i] for i in train_idx]
         val_items = [items[i] for i in val_idx]
         test_items = [items[i] for i in test_idx]
         return train_items, val_items, test_items
 
+    # Shuffle and split without stratification
     shuffled = items[:]
     rng.shuffle(shuffled)
     train_items = shuffled[:train_count]

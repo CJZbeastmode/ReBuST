@@ -86,7 +86,9 @@ def run_split(images_dir: str, out_dir: str, multistage: bool, force: bool) -> N
 
         try:
             wsi = WSI(img_path, multistage=multistage, embedder=embedder)
-            save_wsi_snapshot(wsi, case_id=case_id, img_path=img_path, out_path=out_path)
+            save_wsi_snapshot(
+                wsi, case_id=case_id, img_path=img_path, out_path=out_path
+            )
             success += 1
         except Exception as exc:
             print(f"[FAIL] {case_id}: {exc}")

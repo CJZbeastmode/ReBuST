@@ -48,8 +48,6 @@ def run_pipeline(
     image_path: str,
     model_path: str,
     budget_ratio: float = DEFAULT_BUDGET,
-    score_key: str = DEFAULT_SCORE,
-    min_level: int = DEFAULT_MIN_LEVEL,
     out: str = DEFAULT_OUTFILE,
     deterministic: bool = True,
 ) -> WSI:

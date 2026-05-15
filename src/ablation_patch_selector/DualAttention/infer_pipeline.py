@@ -20,11 +20,17 @@ from src.ablation_patch_selector.DualAttention.models import (
     RazaHardAttention,
     SoftAttentionEmbedding,
 )
-from src.ablation_patch_selector.DualAttention.sampling import sample_attention_candidates
+from src.ablation_patch_selector.DualAttention.sampling import (
+    sample_attention_candidates,
+)
 from src.ablation_patch_selector.DualAttention.train_pipeline import _predict_greedy
-from src.ablation_patch_selector.SASHA_archive.data import PTEmbeddingDirDataset, build_items_with_label_map
+from src.ablation_patch_selector.SASHA_archive.data import (
+    PTEmbeddingDirDataset,
+    build_items_with_label_map,
+)
 
 
+# List .pt files in a directory
 def list_pt_files(input_dir: str) -> List[Path]:
     base = Path(input_dir)
     if not base.exists() or not base.is_dir():
@@ -32,14 +38,20 @@ def list_pt_files(input_dir: str) -> List[Path]:
     files = [
         p
         for p in sorted(base.iterdir())
-        if p.is_file() and p.suffix.lower() == ".pt" and not p.name.startswith(".") and not p.name.startswith("._")
+        if p.is_file()
+        and p.suffix.lower() == ".pt"
+        and not p.name.startswith(".")
+        and not p.name.startswith("._")
     ]
     if not files:
         raise FileNotFoundError(f"No .pt files found in {input_dir}")
     return files
 
 
-def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -> np.ndarray:
+# Compute per-class confusion matrix
+def _confusion_matrix(
+    labels: np.ndarray, preds: np.ndarray, num_classes: int
+) -> np.ndarray:
     mat = np.zeros((num_classes, num_classes), dtype=np.int64)
     for label, pred in zip(labels, preds):
         if 0 <= label < num_classes and 0 <= pred < num_classes:
@@ -47,6 +59,7 @@ def _confusion_matrix(labels: np.ndarray, preds: np.ndarray, num_classes: int) -
     return mat
 
 
+# Compute classification metrics from labels, predictions, and probabilities
 def _classification_metrics(
     labels: np.ndarray, preds: np.ndarray, probs: np.ndarray, num_classes: int
 ) -> Dict[str, object]:
@@ -60,7 +73,9 @@ def _classification_metrics(
             "per_class_f1": [float("nan")] * num_classes,
             "per_class_accuracy_summary": [],
             "support": [0] * num_classes,
-            "confusion_matrix": np.zeros((num_classes, num_classes), dtype=np.int64).tolist(),
+            "confusion_matrix": np.zeros(
+                (num_classes, num_classes), dtype=np.int64
+            ).tolist(),
         }
 
     conf = _confusion_matrix(labels, preds, num_classes)
@@ -131,6 +146,7 @@ def _classification_metrics(
     }
 
 
+# Bootstrap resampling to estimate metric standard deviations
 def _bootstrap_metric_std(
     labels: np.ndarray,
     preds: np.ndarray,
@@ -173,6 +189,7 @@ def _bootstrap_metric_std(
     return out
 
 
+# Load soft and hard model from a checkpoint
 def load_checkpoint(checkpoint_path: str, device: torch.device):
     ckpt = torch.load(checkpoint_path, map_location=device)
     soft = SoftAttentionEmbedding(
@@ -192,18 +209,27 @@ def load_checkpoint(checkpoint_path: str, device: torch.device):
     return soft, hard, ckpt
 
 
+# Pad or trim coords to coord_dim
 def _prepare_coords(coords: torch.Tensor, coord_dim: int) -> torch.Tensor:
     if coords is None or coords.numel() == 0:
-        return torch.zeros(0, coord_dim, device=coords.device if coords is not None else None)
+        return torch.zeros(
+            0, coord_dim, device=coords.device if coords is not None else None
+        )
     if coords.dim() == 1:
         coords = coords.unsqueeze(0)
     if coords.shape[1] >= coord_dim:
         return coords[:, -coord_dim:]
-    pad = torch.zeros(coords.shape[0], coord_dim - coords.shape[1], device=coords.device, dtype=coords.dtype)
+    pad = torch.zeros(
+        coords.shape[0],
+        coord_dim - coords.shape[1],
+        device=coords.device,
+        dtype=coords.dtype,
+    )
     return torch.cat([coords, pad], dim=1)
 
 
 def run_inference(args: argparse.Namespace) -> Dict[str, object]:
+    # Set up
     if args.output and args.out_json:
         os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -227,10 +253,13 @@ def run_inference(args: argparse.Namespace) -> Dict[str, object]:
     y_prob: List[List[float]] = []
     predictions: List[Dict[str, object]] = []
 
+    # Inference loop
     with torch.no_grad():
         for sample in dataset:
             embeddings = sample.embeddings.to(device)
-            coords = _prepare_coords(sample.coords.to(device), int(ckpt.get("coord_dim", 2)))
+            coords = _prepare_coords(
+                sample.coords.to(device), int(ckpt.get("coord_dim", 2))
+            )
             n = int(embeddings.shape[0])
             if n <= 0:
                 continue
@@ -271,6 +300,7 @@ def run_inference(args: argparse.Namespace) -> Dict[str, object]:
                 }
             )
 
+    # Compute metrics
     labels_np = np.array(y_true, dtype=np.int64)
     preds_np = np.array(y_pred, dtype=np.int64)
     probs_np = (
@@ -323,7 +353,11 @@ def run_inference(args: argparse.Namespace) -> Dict[str, object]:
     if args.output and out_path:
         print(f"[SAVED] {out_path}")
 
-    return {"metrics": metrics, "output_path": out_path, "output_enabled": bool(args.output)}
+    return {
+        "metrics": metrics,
+        "output_path": out_path,
+        "output_enabled": bool(args.output),
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -332,7 +366,10 @@ def parse_args() -> argparse.Namespace:
         "--embeddings-dir",
         default="/Volumes/Xbox_HD/Data/extracted_with_embeddings/full/test",
     )
-    parser.add_argument("--checkpoint", default="data/models/ablation_patch_selector/dual_attention/best_dual_attention.pt")
+    parser.add_argument(
+        "--checkpoint",
+        default="data/models/ablation_patch_selector/dual_attention/best_dual_attention.pt",
+    )
     parser.add_argument("--out-json", default="data/benchmark/dual_attention.json")
     parser.add_argument("--output", dest="output", action="store_true", default=True)
     parser.add_argument("--no-output", dest="output", action="store_false")

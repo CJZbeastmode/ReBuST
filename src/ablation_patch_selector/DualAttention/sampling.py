@@ -7,6 +7,7 @@ from typing import Tuple
 import torch
 
 
+# Check whether coords have nonzero spatial signal
 def _has_valid_coords(coords: torch.Tensor) -> bool:
     if coords is None or coords.numel() == 0:
         return False
@@ -15,6 +16,7 @@ def _has_valid_coords(coords: torch.Tensor) -> bool:
     return bool(torch.any(coords.abs() > 0))
 
 
+# Normalize coords to zero mean and unit std
 def _normalize_coords(coords: torch.Tensor) -> torch.Tensor:
     if coords.numel() == 0:
         return coords
@@ -88,6 +90,7 @@ def sample_attention_candidates(
     return embeddings[picked_idx], coords[picked_idx], picked_idx
 
 
+# Penalty for selected patches that are too spatially close
 def pairwise_distance_penalty(coords: torch.Tensor, min_dist: float) -> torch.Tensor:
     if coords.numel() == 0 or coords.shape[0] < 2 or min_dist <= 0:
         return torch.tensor(0.0, device=coords.device)

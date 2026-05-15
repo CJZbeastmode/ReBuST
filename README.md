@@ -1,46 +1,87 @@
-# MA (reorganized)
+# MA
 
-Quick notes:
+This repository is a research codebase for building, training, and evaluating
+WSI patch-selection pipelines and downstream classifiers. The thesis contains
+the scientific narrative; this README focuses on technical usage.
 
-- Code is maintained in `src/` as before. For convenience there's a `ma/` package that exposes many modules from `src/` so you can import them as `from ma.reward_module import InfoGainReward`.
-- Utility scripts were copied into `scripts/` (you can run them directly).
-- The `dynamic_patcher` utilities were archived into `src/archive/dynamic_patcher/` to keep them safe.
+## Setup
 
-Recommended quick start (use your conda env):
+This project expects Python 3.10+ and a working PyTorch install. Use a clean
+environment and install the dependencies from requirements.txt.
 
 ```fish
 # from repository root
-python -m rl        # original entrypoint (keeps using src/ modules)
-# or run scripts explicitly
-python scripts/build_faiss_txt.py
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
+If you use conda, create an environment first and install the same requirements
+into it. GPU acceleration is optional but recommended for training.
 
+## Repository layout
 
-To mention:
-PLIP + plip result
+- src/: Core modules and training/inference code
+  - streaming_transformer/: ReBuST model (training + inference)
+  - ablation_patch_selector/: Patch selector ablations (SASHA, EvoPS, DualAttention)
+  - ablation_classifier/: Classifier ablations (aggregation transformer, mamba)
+  - global_budget_enforcer/: HUMBE budget enforcement
+  - training/: RL and supervised training code
+  - inference/: RL, supervised, and greedy inference utilities
+  - utils/: WSI handling, embeddings, patch scoring, helpers
+- pipeline/: Step-by-step runnable entry points (end-to-end pipelines)
+- scripts/: Standalone utilities and experiments
+- data/: Metrics, visualizations, and intermediate artifacts
+- docs/: Notes and supporting documentation
 
-## Validate information-gain proxies
+## Quick start
 
-Use this script to compare entropy/contrastive/centroid proxy scores against
-actual downstream label gain with MI proxies and rank correlation.
+Most users should follow the pipeline steps documented in pipeline/README.md.
+
+```fish
+# from repository root
+python pipeline/step1_create_wsi_objects.py
+python pipeline/step2_global_budget_enforcer.py
+python pipeline/step3_train_a2c_model.py
+python pipeline/step4_infer_a2c_model.py
+python pipeline/step5_extract_embeddings.py
+python pipeline/step6_train_streaming_transformer.py
+python pipeline/step7_infer_streaming_transformer.py
+```
+
+## Ablations
+
+Patch selector ablations and classifier ablations are also wired in pipeline/.
+
+```fish
+python pipeline/step8_train_ablation_patch_selectors.py --method sasha
+python pipeline/step9_infer_ablation_patch_selectors.py --method sasha
+
+python pipeline/step10_train_ablation_classifiers.py --family aggregation --method CLAM
+python pipeline/step11_infer_ablation_classifiers.py --family mamba
+```
+
+## Utilities
+
+Scripts in scripts/ include data preparation, validation, and analysis helpers.
+Each script has inline help and can be run directly.
+
+Example:
 
 ```fish
 python scripts/validate_info_gain_proxy.py \
-	--csv data/benchmark/proxy_eval.csv \
-	--score-cols entropy_score contrastive_score centroid_score \
-	--gain-col downstream_gain \
-	--out-csv data/benchmark/proxy_eval_ranked.csv \
-	--out-json data/benchmark/proxy_eval_ranked.json \
-	--plot-dir data/visualizations/proxy_eval
+  --csv data/benchmark/proxy_eval.csv \
+  --score-cols entropy_score contrastive_score centroid_score \
+  --gain-col downstream_gain \
+  --out-csv data/benchmark/proxy_eval_ranked.csv \
+  --out-json data/benchmark/proxy_eval_ranked.json \
+  --plot-dir data/visualizations/proxy_eval
 ```
 
-If your CSV does not have a direct gain column, pass before/after metrics:
+## Notes
 
-```fish
-python scripts/validate_info_gain_proxy.py \
-	--csv data/benchmark/proxy_eval.csv \
-	--score-cols entropy_score contrastive_score centroid_score \
-	--before-col accuracy_before \
-	--after-col accuracy_after
-```
+- The codebase expects WSI files (.svs) and precomputed .pt embeddings in the
+  folder layouts used by the pipeline steps.
+- All training/inference entry points are in src/ and are wrapped by pipeline/.
+- If you change dataset layout or file naming, update the corresponding pipeline
+  step or dataset loader in src/.

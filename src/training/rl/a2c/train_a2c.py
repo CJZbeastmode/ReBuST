@@ -1,45 +1,9 @@
 """
-Actor-Critic (A2C) Level 4: Multi-Step Returns with GAE
-========================================================
+Actor-Critic (A2C) Training Pipeline
 
-CHANGES FROM LEVEL 3 (a2c_lvl3.py):
-------------------------------------
-✅ All Level 3 features retained:
-   - Visited patch tracking
-   - Visit count per location
-   - Last action encoding
-   - Depth trace
-   - Redundancy penalty in reward function
-   - Spatial overlap detection
-   - Parent patch embedding tracking
-   - Hierarchical context awareness
-
-✅ NEW Level 4 additions:
-   - Generalized Advantage Estimation (GAE)
-   - Multi-step return computation (TD(λ))
-   - Eligibility traces for credit assignment
-   - Lambda parameter for bias-variance tradeoff
-
-✅ State dimension unchanged: 1033
-   - Same as Level 3 (no architectural changes)
-   - Changes are in the training algorithm, not the state representation
-
-✅ Training improvements:
-   - Better credit assignment across time steps
-   - Reduced variance in advantage estimates
-   - More stable learning through temporal smoothing
-   - Configurable λ parameter (default: 0.95)
-
-KEY CLAIM UNLOCKED:
--------------------
-"Agent learns long-horizon value propagation"
-- Moves from TD(0) to TD(λ) / GAE
-- Better credit assignment for delayed rewards
-- RL maturity: standard PPO/A3C technique
-- Demonstrates understanding of multi-step returns
-
-This is your FOURTH and final extension, completing the progression from
-basic A2C to a sophisticated hierarchical RL agent with proper credit assignment.
+This script implements the training loop for an Actor-Critic (A2C) reinforcement learning agent designed to navigate whole slide images (WSIs) 
+using a hierarchical patch selection strategy. The agent learns to select informative patches while avoiding redundant exploration through a 
+reward structure that incorporates both the patch scoring module and penalties for revisiting similar regions.
 """
 
 import os
@@ -47,7 +11,6 @@ import sys
 import argparse
 from pathlib import Path
 import time
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -80,26 +43,34 @@ OVERLAP_THRESHOLD = 0.3  # Spatial proximity threshold for overlap
 GAE_LAMBDA = 0.95  # GAE lambda parameter
 PARENT_PROJ_DIM = 64  # Project parent embedding from 512-D to 64-D
 # ========================================================================
-# ✨ END LEVEL 4 ADDITIONS
+# END HYPERPARMAETERS
 # ========================================================================
 
 
 # ============================================================================
-# History Tracker (same as Level 3)
+# History Tracker
 # ============================================================================
 class HistoryTracker:
     """
     Track visited patches, exploration history, and hierarchical context.
-
-    (Same as Level 3 - no changes)
     """
 
     def __init__(self, grid_size=32):
+        """
+        Initialize the history tracker.
+
+        Parameters
+        ----------
+        grid_size : int
+            Size of the spatial grid for hashing locations (default: 32)
+        """
         self.grid_size = grid_size
         self.reset()
 
     def reset(self):
-        """Reset history at episode start."""
+        """
+        Reset the history tracker for a new episode.
+        """
         self.visited = {}
         self.last_action = 0
         self.depth = 0
@@ -109,20 +80,68 @@ class HistoryTracker:
         self.has_parent = False
 
     def _hash_location(self, level, x, y):
-        """Hash continuous coordinates to discrete grid."""
+        """
+        Hash continuous coordinates to discrete grid.
+
+        Parameters
+        ----------
+        level : float
+            Normalized level of the patch (0 to 1)
+        x : float
+            Normalized x coordinate of the patch (0 to 1)
+        y : float
+            Normalized y coordinate of the patch (0 to 1)
+
+        Returns
+        -------
+        key : tuple
+            Discrete hash key for the location
+        """
         x_bin = int(x * self.grid_size)
         y_bin = int(y * self.grid_size)
         return (level, x_bin, y_bin)
 
     def visit(self, level, x, y):
-        """Record a visit to a location."""
+        """
+        Record a visit to a location.
+
+        Parameters
+        ----------
+        level : float
+            Normalized level of the patch (0 to 1)
+        x : float
+            Normalized x coordinate of the patch (0 to 1)
+        y : float
+            Normalized y coordinate of the patch (0 to 1)
+
+        Returns
+        -------
+        visit_count : int
+            Number of times the location has been visited
+        """
         key = self._hash_location(level, x, y)
         self.visited[key] = self.visited.get(key, 0) + 1
         self.visited_locations.append((level, x, y))
         return self.visited[key]
 
     def get_visit_count(self, level, x, y):
-        """Get visit count for a location."""
+        """
+        Get the visit count for a location.
+
+        Parameters
+        ----------
+        level : float
+            Normalized level of the patch (0 to 1)
+        x : float
+            Normalized x coordinate of the patch (0 to 1)
+        y : float
+            Normalized y coordinate of the patch (0 to 1)
+
+        Returns
+        -------
+        visit_count : int
+            Number of times the location has been visited
+        """
         key = self._hash_location(level, x, y)
         return self.visited.get(key, 0)
 
@@ -130,17 +149,20 @@ class HistoryTracker:
         """Update the last action taken and hierarchical context."""
         self.last_action = action
 
-        if action == 1:  # ZOOM
+        # If action is zoom, we update depth and store parent embedding for context. If current_embedding is provided, we also update it.
+        if action == 1:
             self.depth += 1
             if current_embedding is not None:
                 self.parent_embedding = current_embedding.copy()
                 self.has_parent = True
 
+        # If action is STOP, we can optionally update the current embedding to reflect the final patch context.
         if current_embedding is not None:
             self.current_embedding = current_embedding.copy()
 
     def compute_redundancy_score(self, level, x, y, threshold=OVERLAP_THRESHOLD):
         """Compute redundancy score based on spatial overlap."""
+        # If we have no visits, there's no redundancy
         if len(self.visited_locations) == 0:
             return 0.0
 
@@ -150,26 +172,48 @@ class HistoryTracker:
             if abs(l - level) < 0.1
         ]
 
+        # If no visits at the same level, no redundancy
         if len(same_level_visits) == 0:
             return 0.0
 
+        # Compute distances to same-level visits and count how many are within the threshold
         distances = []
         for _, vx, vy in same_level_visits:
             dist = np.sqrt((x - vx) ** 2 + (y - vy) ** 2)
             distances.append(dist)
 
+        # Redundancy score is the fraction of same-level visits that are within the overlap threshold
         overlaps = sum(1 for d in distances if d < threshold)
         redundancy = min(overlaps / max(1, len(same_level_visits)), 1.0)
 
         return redundancy
 
     def compute_overlap_penalty(self, level, x, y):
-        """Compute explicit penalty for being too close to visited regions."""
+        """
+        Compute explicit penalty for being too close to visited regions.
+
+        Parameters
+        ----------
+        level : float
+            Normalized level of the patch (0 to 1)
+        x : float
+            Normalized x coordinate of the patch (0 to 1)
+        y : float
+            Normalized y coordinate of the patch (0 to 1)
+
+        Returns
+        -------
+        penalty : float
+            Overlap penalty (0.0 for no penalty, 0.5 for moderate proximity, 1.0 for very close)
+        """
+        # If we have very few visits, we can skip this penalty to allow initial exploration
         if len(self.visited_locations) < 2:
             return 0.0
 
+        # Check recent visits for proximity to encourage spatial diversity
         recent_visits = self.visited_locations[-5:]
 
+        # Apply penalty based on proximity to recent visits at the same level
         for l, vx, vy in recent_visits:
             if abs(l - level) < 0.1:
                 dist = np.sqrt((x - vx) ** 2 + (y - vy) ** 2)
@@ -181,13 +225,32 @@ class HistoryTracker:
         return 0.0
 
     def get_history_features(self, level, x, y):
-        """Extract history features for state augmentation."""
+        """
+        Extract history features for state augmentation.
+
+        Parameters
+        ----------
+        level : float
+            Normalized level of the patch (0 to 1)
+        x : float
+            Normalized x coordinate of the patch (0 to 1)
+        y : float
+            Normalized y coordinate of the patch (0 to 1)
+
+        Returns
+        -------
+        features : np.array
+            Array of history features including visit count, last action, depth, redundancy score, and overlap penalty
+        """
+        # Visit count normalized to [0,1], capped at 5 visits for stability
         visit_count = self.get_visit_count(level, x, y)
         visit_count_norm = min(visit_count, 5) / 5.0
 
+        # Redundancy score based on spatial overlap with visited locations
         redundancy_score = self.compute_redundancy_score(level, x, y)
         overlap_penalty = self.compute_overlap_penalty(level, x, y)
 
+        # Return features as a numpy array
         return np.array(
             [
                 visit_count_norm,
@@ -200,7 +263,17 @@ class HistoryTracker:
         )
 
     def get_hierarchical_features(self):
-        """Extract hierarchical context features."""
+        """
+        Extract hierarchical context features.
+
+        Returns
+        -------
+        parent_emb : np.array
+            Parent patch embedding (512-D) or zeros if no parent
+        has_parent : float
+            Indicator of whether there is a parent embedding (1.0 if yes, 0.0 if no)
+        """
+        # Return parent embedding if available, otherwise zeros. Also return has_parent flag.
         if self.has_parent and self.parent_embedding is not None:
             return self.parent_embedding.copy(), 1.0
         else:
@@ -211,20 +284,37 @@ class HistoryTracker:
 # Actor-Critic Network (Level 4 - FIXED with projection)
 # ============================================================================
 class ActorCritic(nn.Module):
-    """Same fix as Level 3: parent projection + increased hidden_dim."""
+    """
+    Actor-Critic network with hierarchical context awareness and parent embedding projection.
+    """
 
     def __init__(
         self, base_state_dim=520, parent_emb_dim=512, parent_proj_dim=64, hidden_dim=512
     ):
+        """
+        Actor-Critic network with hierarchical context awareness.
+
+        Parameters
+        ----------
+        base_state_dim : int
+            Dimension of the base state (1033 total - 512 parent emb - 1 has_parent = 520)
+        parent_emb_dim : int
+            Dimension of the parent patch embedding (512)
+        parent_proj_dim : int
+            Dimension to project parent embedding down to (default: 64)
+        hidden_dim : int
+            Dimension of hidden layers in the network (default: 512)
+        """
         super().__init__()
 
+        # Projection layer for parent embedding to reduce dimensionality and improve learning stability
         self.parent_proj = nn.Sequential(
             nn.Linear(parent_emb_dim, parent_proj_dim),
             nn.ReLU(),
         )
 
+        # Simple MLP encoder (no recurrence) since we use GAE for temporal credit assignment
         final_state_dim = base_state_dim + parent_proj_dim + 1
-
         self.encoder = nn.Sequential(
             nn.Linear(final_state_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -235,26 +325,45 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
         )
 
+        # Separate heads for policy and value
         self.actor = nn.Linear(hidden_dim, 2)
         self.critic = nn.Linear(hidden_dim, 1)
 
-        nn.init.orthogonal_(self.parent_proj[0].weight, gain=1.0)
-        nn.init.zeros_(self.parent_proj[0].bias)
-        nn.init.orthogonal_(self.actor.weight, gain=0.1)
-        nn.init.orthogonal_(self.critic.weight, gain=1.0)
-        nn.init.zeros_(self.actor.bias)
-        self.actor.bias.data[1] = 0.1
-        nn.init.zeros_(self.critic.bias)
+        # Initialization
+        nn.init.orthogonal_(self.parent_proj[0].weight, gain=1.0) # Orthogonal initialization for projection layer to preserve information
+        nn.init.zeros_(self.parent_proj[0].bias) # Zero bias for projection layer
+        nn.init.orthogonal_(self.actor.weight, gain=0.1) # Smaller gain for actor to prevent large initial policy updates
+        nn.init.orthogonal_(self.critic.weight, gain=1.0) # Standard initialization for critic
+        nn.init.zeros_(self.actor.bias) # Zero bias for actor; we will manually set the STOP action bias to encourage initial exploration
+        self.actor.bias.data[1] = 0.1 # Positive bias for STOP action to encourage initial exploration and prevent collapse
+        nn.init.zeros_(self.critic.bias) # Zero bias for critic to start with value estimates around zero
 
     def forward(self, x):
-        """Split state, project parent embedding, forward pass."""
+        """
+        Split state, project parent embedding, forward pass.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input state tensor of shape [B, 1033]
+
+        Returns
+        -------
+        logits : torch.Tensor
+            Action logits of shape [B, 2]
+        value : torch.Tensor
+            State value estimates of shape [B, 1]
+        """
+        # Split input state into components
         base_state = x[:, :520]
         parent_emb = x[:, 520:1032]
         has_parent = x[:, 1032:1033]
 
+        # Project parent embedding to lower dimension
         parent_proj = self.parent_proj(parent_emb)
         x_proj = torch.cat([base_state, parent_proj, has_parent], dim=1)
 
+        # Forward pass through encoder and heads
         h = self.encoder(x_proj)
         logits = self.actor(h)
         value = self.critic(h)
@@ -262,14 +371,31 @@ class ActorCritic(nn.Module):
 
 
 # ============================================================================
-# State construction (same as Level 3)
+# State construction
 # ============================================================================
 def get_hierarchical_aware_state(env_state, history, level_norm, x_norm, y_norm):
     """
     Augment environment state with history and hierarchical context features.
 
-    (Same as Level 3 - no changes)
+    Parameters
+    ----------
+    env_state : np.array
+        Original environment state (1033-D).
+    history : HistoryTracker
+        History tracker instance for feature extraction.
+    level_norm : float
+        Normalized level of the current patch.
+    x_norm : float
+        Normalized x coordinate of the current patch.
+    y_norm : float
+        Normalized y coordinate of the current patch.
+
+    Returns
+    -------
+    state : np.array
+        Augmented state vector (1033-D) with history and hierarchical features.
     """
+    # Extract hierarchical context features from history
     history_features = history.get_history_features(level_norm, x_norm, y_norm)
     parent_emb, has_parent = history.get_hierarchical_features()
 
@@ -277,7 +403,7 @@ def get_hierarchical_aware_state(env_state, history, level_norm, x_norm, y_norm)
 
 
 # ============================================================================
-# Episode Rollout (same as Level 3)
+# Episode Rollout
 # ============================================================================
 def rollout_episode(
     env,
@@ -289,7 +415,23 @@ def rollout_episode(
     """
     Execute one complete episode with hierarchical-context-aware policy.
 
-    (Same as Level 3 - no changes)
+    Parameters
+    ----------
+    env : DynamicPatchEnv
+        Environment instance for interaction.
+    model : ActorCritic
+        Actor-Critic model for action selection.
+    device : torch.device
+        Device for tensor computations.
+    redundancy_penalty : float
+        Penalty weight for revisiting regions (default: 0.2).
+    overlap_threshold : float
+        Spatial proximity threshold for overlap detection (default: 0.3).
+
+    Returns
+    -------
+    trajectory : dict
+        Collected trajectory data including states, actions, rewards, etc.
     """
     history = HistoryTracker(grid_size=32)
 
@@ -376,73 +518,61 @@ def rollout_episode(
 
 
 # ============================================================================
-# ✨ LEVEL 4: GAE-based advantage and return computation
+# GAE-based advantage and return computation
 # ============================================================================
 def compute_gae_advantages_and_returns(trajectory, gamma=GAMMA, gae_lambda=GAE_LAMBDA):
     """
-    Compute returns and advantages using Generalized Advantage Estimation (GAE).
-
-    ✨ LEVEL 4 CHANGE: Replaces TD(0) with GAE(λ)
-
-    GAE computes advantages as:
-        A_t^GAE(λ) = Σ_{l=0}^∞ (γλ)^l δ_{t+l}
-    where δ_t = r_t + γV(s_{t+1}) - V(s_t) is the TD error.
-
-    This provides a bias-variance tradeoff:
-    - λ=0: TD(0) (low variance, high bias)
-    - λ=1: Monte Carlo (high variance, low bias)
-    - λ∈(0,1): GAE (balanced)
+    Compute advantages and returns using Generalized Advantage Estimation (GAE).
 
     Parameters
     ----------
     trajectory : dict
-        Episode trajectory with rewards and values
+        Episode trajectory containing states, actions, log_probs, values, rewards
     gamma : float
-        Discount factor
+        Discount factor (default: 0.99)
     gae_lambda : float
         GAE lambda parameter (default: 0.95)
 
     Returns
     -------
     returns : torch.Tensor
-        Discounted returns G_t
+        Computed returns for each time step (shape: [T])
     advantages : torch.Tensor
-        GAE advantages A_t^GAE
+        Computed advantages for each time step (shape: [T])
     """
+    # Extract rewards and values from the trajectory
     rewards = trajectory["rewards"]
     values = trajectory["values"]
 
+    # Number of time steps in the episode
     T = len(rewards)
 
+    # Convert lists to tensors for vectorized computation
     values_tensor = torch.stack(values)
     rewards_tensor = torch.tensor(
         rewards, dtype=torch.float32, device=values_tensor.device
     )
 
-    # ====================================================================
-    # ✨ BEGIN LEVEL 4: Compute GAE advantages
-    # ====================================================================
+    # Initialize tensors for advantages and returns
     advantages = torch.zeros(T, device=values_tensor.device)
-    gae = 0.0  # Running sum of GAE
+    gae = 0.0
 
     # Compute GAE advantages backward through time
     for t in reversed(range(T)):
+        # Determine the value of the next state (V(s_{t+1})) for TD error calculation
         if t == T - 1:
-            next_value = 0.0  # Terminal state
+            next_value = 0.0
         else:
             next_value = values_tensor[t + 1]
 
-        # TD error: δ_t = r_t + γV(s_{t+1}) - V(s_t)
+        # TD error
         delta = rewards_tensor[t] + gamma * next_value - values_tensor[t]
 
-        # GAE: A_t = δ_t + γλA_{t+1}
+        # GAE accumulation
         gae = delta + gamma * gae_lambda * gae
         advantages[t] = gae
-    # ====================================================================
-    # ✨ END LEVEL 4 ADDITIONS
-    # ====================================================================
 
-    # Compute returns from advantages: G_t = A_t + V(s_t)
+    # Compute returns from advantages
     returns = advantages + values_tensor
 
     return returns, advantages
@@ -458,31 +588,55 @@ def a2c_update(
     value_coef=VALUE_COEF,
 ):
     """
-    Perform A2C update with GAE.
+    This function computes the policy loss, value loss, and entropy regularization
+    using the advantages and returns computed from GAE, and then performs a gradient
+    update on the model parameters.
 
-    ✨ LEVEL 4 CHANGE: Uses GAE instead of TD(0)
+    Parameters
+    ----------
+    model : nn.Module
+        Actor-Critic model to update
+    optimizer : torch.optim.Optimizer
+        Optimizer for updating model parameters
+    trajectory : dict
+        Episode trajectory containing states, actions, log_probs, values, rewards
+    gamma : float
+        Discount factor (default: 0.99)
+    gae_lambda : float
+        GAE lambda parameter (default: 0.95)
+    entropy_beta : float
+        Coefficient for entropy regularization (default: 0.08)
+    value_coef : float
+        Coefficient for value loss (default: 0.5)
+
+    Returns
+    -------
+    metrics : dict
+        Dictionary containing loss components and other metrics for logging
     """
-    # ====================================================================
-    # ✨ LEVEL 4: Use GAE for advantage computation
-    # ====================================================================
+
     returns, advantages = compute_gae_advantages_and_returns(
         trajectory, gamma, gae_lambda
     )
-    # ====================================================================
 
+    # Normalize advantages for stability
     if advantages.numel() > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std() + EPS)
 
+    # Stack log probabilities and values for loss computation
     log_probs = torch.stack(trajectory["log_probs"])
     values = torch.stack(trajectory["values"])
 
-    # Recompute for entropy
+    # Stack states for forward pass
     states = trajectory["states"]
     states_tensor = torch.stack(
         [torch.tensor(s, dtype=torch.float32, device=values.device) for s in states]
     )
 
+    # Forward pass to get logits for entropy calculation
     logits, _ = model(states_tensor)
+
+    # Compute entropy for exploration regularization
     dist = Categorical(logits=logits)
     entropy = dist.entropy()
 
@@ -490,7 +644,6 @@ def a2c_update(
     policy_loss = -(log_probs * advantages.detach()).mean()
     value_loss = F.mse_loss(values, returns)
     entropy_loss = -entropy.mean()
-
     loss = policy_loss + value_coef * value_loss + entropy_beta * entropy_loss
 
     # Optimization
@@ -505,12 +658,14 @@ def a2c_update(
         mean_stop_prob = probs[:, 0].mean().item()
         mean_zoom_prob = probs[:, 1].mean().item()
 
+    # Calculate average raw reward and redundancy impact for logging
     avg_raw_reward = (
         np.mean(trajectory["raw_rewards"]) if "raw_rewards" in trajectory else 0.0
     )
     avg_adjusted_reward = np.mean(trajectory["rewards"])
     redundancy_impact = avg_raw_reward - avg_adjusted_reward
 
+    # Return metrics
     metrics = {
         "loss": loss.item(),
         "policy_loss": policy_loss.item(),
@@ -526,7 +681,6 @@ def a2c_update(
         "avg_raw_reward": avg_raw_reward,
         "redundancy_impact": redundancy_impact,
     }
-
     return metrics
 
 
@@ -545,13 +699,35 @@ def train_a2c(
     gae_lambda=GAE_LAMBDA,
 ):
     """
-    Main A2C Level 4 training loop.
+    This function trains the Actor-Critic model using multi-step returns with GAE.
 
-    ✨ LEVEL 4: Trains agent with GAE for better credit assignment
+    Parameters
+    ----------
+    images_dir : str
+        Directory containing WSI images for training.
+    patch_score : str
+        Patch scoring module to use for reward shaping.
+    num_epochs : int
+        Number of training epochs.
+    episodes_per_image : int
+        Number of episodes to run per image per epoch.
+    output_dir : str
+        Directory to save model checkpoints and logs.
+    device : torch.device or None
+        Device to use for training (e.g., 'cuda', 'mps', or 'cpu'). If None, automatically selects based on availability.
+    redundancy_penalty : float
+        Penalty weight for revisiting regions (default: 0.2).
+    overlap_threshold : float
+        Spatial proximity threshold for overlap detection (default: 0.3).
+    gae_lambda : float
+        GAE lambda parameter for advantage estimation (default: 0.95).
     """
+
+    # Device setup
     if device is None:
         device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
+    # Logging training configuration
     print(
         f"Training A2C Level 4 (Multi-Step Returns with GAE - FIXED) on device: {device}"
     )
@@ -563,11 +739,14 @@ def train_a2c(
         f"Redundancy penalty: {redundancy_penalty} | Overlap threshold: {overlap_threshold}"
     )
 
+    # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
+    # Initialize embedder and patch scoring module
     embedder = Embedder()
     print(f"Using patch score: {patch_score}")
 
+    # Initialize Actor-Critic model and optimizer
     model = ActorCritic(
         base_state_dim=520,
         parent_emb_dim=512,
@@ -578,16 +757,17 @@ def train_a2c(
 
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
+    # Load images
     from glob import glob
 
     image_paths = sorted(glob(f"{images_dir}/*.svs"))
     print(f"Found {len(image_paths)} WSI images")
-
     if len(image_paths) == 0:
         raise ValueError(f"No .svs images found in {images_dir}")
 
     global_step = 0
 
+    # Training loop
     for epoch in range(num_epochs):
         epoch_start = time.time()
         epoch_metrics = {
@@ -599,6 +779,7 @@ def train_a2c(
             "redundancy_impact": [],
         }
 
+        # Loop through images and run episodes
         for img_path in image_paths:
             img_name = Path(img_path).stem
 
@@ -611,24 +792,26 @@ def train_a2c(
                     max_steps=8,
                 )
 
+                # Run multiple episodes per image
                 for ep in range(episodes_per_image):
+                    # Rollout episode and update model using A2C with GAE
                     trajectory = rollout_episode(
                         env, model, device, redundancy_penalty, overlap_threshold
                     )
-                    # ====================================================================
-                    # ✨ LEVEL 4: Pass gae_lambda to update function
-                    # ====================================================================
+
+                    # Compute advantages and returns, then update model
                     metrics = a2c_update(
                         model, optimizer, trajectory, gae_lambda=gae_lambda
                     )
-                    # ====================================================================
 
+                    # Aggregate metrics for logging
                     for key in epoch_metrics:
                         if key in metrics:
                             epoch_metrics[key].append(metrics[key])
 
                     global_step += 1
 
+                    # Periodic logging
                     if global_step % 10 == 0:
                         print(
                             f"[Epoch {epoch+1}/{num_epochs}] "
@@ -642,10 +825,12 @@ def train_a2c(
                             f"Redund: {metrics['redundancy_impact']:.4f}"
                         )
 
+            # Catch and log any exceptions during image processing to avoid crashing the training loop
             except Exception as e:
                 print(f"[ERROR] Failed to process {img_name}: {e}")
                 continue
 
+        # End of epoch logging and checkpointing
         epoch_time = time.time() - epoch_start
         print(f"\n{'='*80}")
         print(f"Epoch {epoch+1}/{num_epochs} completed in {epoch_time:.2f}s")
@@ -659,6 +844,7 @@ def train_a2c(
 
         print(f"{'='*80}\n")
 
+        # Save checkpoint at the end of each epoch
         checkpoint_path = os.path.join(output_dir, f"a2c_lvl4_epoch_{epoch+1}.pt")
         torch.save(
             {

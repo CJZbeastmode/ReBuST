@@ -1,12 +1,28 @@
 """
-Module defining the PatchNode class, which represents a node in the patch hierarchy tree.
+PatchNode — hierarchy node for patch trees
+==========================================
+
+Represents a node in the WSI patch hierarchy, used for explicit tree
+construction when a full patch tree is required.
 """
+
+# ==========================================================================
+# Imports
+# ==========================================================================
 
 from typing import Optional
 from .wsi import WSI
 
 
+# ==========================================================================
+# Patch tree node
+# ==========================================================================
+
+
 class PatchNode:
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(
         self,
         depth: int,
@@ -24,6 +40,9 @@ class PatchNode:
         -- x (int): x coordinate of this patch in the WSI grid at its level
         -- y (int): y coordinate of this patch in the WSI grid at its level
         -- wsi (WSI): WSI object needed for expansion
+
+        Returns:
+            None: Description.
         """
         self.depth = depth
         self.max_depth = max_depth
@@ -35,10 +54,20 @@ class PatchNode:
 
         self._expand_children(wsi)
 
+    # ---------------------------------------------------------------------------
+    # _expand_children
+    # ---------------------------------------------------------------------------
     def _expand_children(self, wsi):
         """
         Fully initialize all children of this node (one level down),
         if depth < max_depth. Uses WSI geometry.
+
+        Args:
+            self: Description.
+            wsi: Description.
+
+        Returns:
+            object: Description.
         """
         if not self.can_zoom():
             return
@@ -73,24 +102,54 @@ class PatchNode:
                 child_node.parent = self
                 self.children.append(child_node)
 
+    # ---------------------------------------------------------------------------
+    # is_leaf
+    # ---------------------------------------------------------------------------
     def is_leaf(self) -> bool:
         """
         Check if this node is a leaf (i.e. has no children).
+
+        Args:
+            self: Description.
+
+        Returns:
+            bool: Description.
         """
         return len(self.children) == 0
 
+    # ---------------------------------------------------------------------------
+    # remaining_depth
+    # ---------------------------------------------------------------------------
     def remaining_depth(self) -> int:
         """
         Return how many more times this node can be zoomed in before reaching max_depth.
+
+        Args:
+            self: Description.
+
+        Returns:
+            int: Description.
         """
         return self.max_depth - self.depth
 
+    # ---------------------------------------------------------------------------
+    # can_zoom
+    # ---------------------------------------------------------------------------
     def can_zoom(self) -> bool:
         """
         Check if this node can be zoomed in (i.e. has children) based on depth.
+
+        Args:
+            self: Description.
+
+        Returns:
+            bool: Description.
         """
         return self.depth < self.max_depth
 
+    # ---------------------------------------------------------------------------
+    # list_all_descendants
+    # ---------------------------------------------------------------------------
     def list_all_descendants(
         node: "PatchNode",
         wsi,

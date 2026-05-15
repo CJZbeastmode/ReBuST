@@ -1,37 +1,19 @@
 """
-Module for precompute embeddings.
-Precompute patch-level embeddings for a list of images and store them on disk.
+Precompute embeddings — patch-level feature extraction
+======================================================
 
-This function iterates over images, samples patches using a user-provided
-extractor, computes embeddings, and stores results in per-image `.npz` files.
+Precompute patch embeddings for a list of images and store them on disk.
 
 Design goals:
 -------------
 - Robust to individual patch failures
 - Safe to run unattended on large WSI collections
-- Embeddings are stored on CPU as float32 for portability
-
-Args:
-    image_paths:
-        List of image paths (e.g. WSI files).
-    embedder:
-        Object exposing `img_emb(patch)` → torch.Tensor or array-like.
-    extractor_fn:
-        Callable(path, n) yielding `(patch, coord)` tuples.
-    out_dir:
-        Directory where per-image `.npz` files are written.
-    patches_per_image:
-        Number of patches to extract per image.
-    label_fn:
-        Optional callable `(path, idx, patch, coord) -> float` producing labels.
-
-Output:
--------
-For each image `<basename>`, writes `<basename>.npz` containing:
-    - embeds:  (N, D) float32 array
-    - coords:  (N, C) float32 array
-    - labels:  (N,) float32 array (optional)
+- Embeddings stored on CPU as float32 for portability
 """
+
+# ==========================================================================
+# Imports
+# ==========================================================================
 
 import os
 import glob
@@ -42,6 +24,9 @@ import torch
 from src.utils.wsi import WSI
 
 
+# ============================================================================
+# precompute_embeddings
+# ============================================================================
 def precompute_embeddings(
     image_paths: List[str],
     embedder,
@@ -56,6 +41,17 @@ def precompute_embeddings(
     - extract patches (user-defined strategy)
     - compute embeddings
     - save everything per-image
+
+    Args:
+        image_paths (List[str]): Paths to input images (WSI files).
+        embedder (object): Embedder with an `img_emb(patch)` method.
+        extractor_fn (Callable): Function yielding `(patch, coord)` tuples.
+        out_dir (str): Output directory for per-image .npz files.
+        patches_per_image (int): Number of patches to extract per image.
+        label_fn (Optional[Callable]): Optional label callback.
+
+    Returns:
+        None: Writes .npz files to disk.
     """
 
     # Ensure output directory exists (best-effort)
@@ -141,6 +137,9 @@ def precompute_embeddings(
             continue
 
 
+# ============================================================================
+# precompute_from_wsi_folder
+# ============================================================================
 def precompute_from_wsi_folder(
     images_dir: str,
     embedder,
@@ -161,6 +160,19 @@ def precompute_from_wsi_folder(
 
     The design intentionally separates extraction logic from embedding logic,
     enabling reuse with alternative sampling strategies.
+
+    Args:
+        images_dir (str): Directory containing WSI files.
+        embedder (object): Embedder with an `img_emb(patch)` method.
+        out_dir (str): Output directory for per-image .npz files.
+        patches_per_image (Optional[int]): Patches per image (ignored if sample_all).
+        levels (Optional[List[int]]): Pyramid levels to sample.
+        sample_all (bool): If True, sample all patches at chosen levels.
+        random_seed (Optional[int]): RNG seed for sampling.
+        label_fn (Optional[Callable]): Optional label callback.
+
+    Returns:
+        None: Writes .npz files to disk.
     """
 
     # --------------------------------------------------
@@ -256,6 +268,9 @@ class EmbeddingDataset(torch.utils.data.Dataset):
     - RL
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(self, npz_dir: str, include_coords: bool = True):
         """
         Initialize the dataset by scanning the directory for `.npz` files and building an index.
@@ -308,12 +323,18 @@ class EmbeddingDataset(torch.utils.data.Dataset):
         else:
             self.state_dim = 0
 
+    # ---------------------------------------------------------------------------
+    # __len__
+    # ---------------------------------------------------------------------------
     def __len__(self):
         """
         Total number of samples across all files.
         """
         return len(self.index)
 
+    # ---------------------------------------------------------------------------
+    # __getitem__
+    # ---------------------------------------------------------------------------
     def __getitem__(self, idx):
         """
         Load a single sample from disk.

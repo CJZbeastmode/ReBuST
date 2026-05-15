@@ -17,7 +17,7 @@ Usage
 -----
 # Full run (all methods):
 python src/downstream_task/run_benchmark.py \\
-    --a2c-model        data/models/rl/a2c_lvl4/a2c_lvl4_final.pt \\
+    --a2c-model        data/models/rl/a2c/a2c_final.pt \\
     --supervised-model data/models/supervised/score_regressor_final.pt \\
     --k 5 --epochs 20 --device cpu
 
@@ -29,7 +29,8 @@ python src/downstream_task/run_benchmark.py \\
 # Skip extraction (embeddings already extracted), re-run benchmark only:
 python src/downstream_task/run_benchmark.py \\
     --methods humbe humbe_a2c \\
-    --a2c-model data/models/rl/a2c_lvl4/a2c_lvl4_final.pt \\
+    --a2c-model data/models/rl/a2c/a2c_final.pt \\
+    --supervised-model data/models/supervised/score_regressor_final.pt \\
     --skip-extraction \\
     --k 5 --epochs 20
 """

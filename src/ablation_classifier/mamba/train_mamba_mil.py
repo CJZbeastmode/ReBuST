@@ -29,12 +29,14 @@ from src.ablation_classifier.mamba.engine import evaluate, train_one_epoch
 from src.ablation_classifier.mamba.model import MambaMIL
 
 
+# Set seed for reproducibility
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
 
+# Helper functions for monitoring and reporting
 def _metrics_brief(metrics: Dict) -> str:
     return (
         f"loss={metrics['loss']:.4f} "
@@ -46,6 +48,7 @@ def _metrics_brief(metrics: Dict) -> str:
     )
 
 
+# Resolve monitor mode from metric name when mode is 'auto'
 def _resolve_monitor_mode(metric_name: str, mode: str) -> str:
     if mode in {"min", "max"}:
         return mode
@@ -54,7 +57,10 @@ def _resolve_monitor_mode(metric_name: str, mode: str) -> str:
     return "max"
 
 
-def _is_improved(current: float, best: float | None, mode: str, min_delta: float) -> bool:
+# Check if current score is strictly better than best within min_delta tolerance
+def _is_improved(
+    current: float, best: float | None, mode: str, min_delta: float
+) -> bool:
     if not math.isfinite(current):
         return False
     if best is None:
@@ -70,6 +76,7 @@ def train(args) -> None:
     device = torch.device(args.device)
     os.makedirs(args.out_dir, exist_ok=True)
 
+    # ---------------- Load data ----------------
     train_items, label_map = build_items_from_pt_labels(args.train_embeddings_dir)
     val_items = build_items_from_pt_labels_with_map(
         args.val_embeddings_dir,
@@ -104,13 +111,23 @@ def train(args) -> None:
         sample_seed=args.seed,
     )
 
+    # === Imbalance: WeightedRandomSampler + logit adjustment ===
     train_labels = [item.label for item in train_items]
-    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(np.float32)
+    class_counts = np.bincount(train_labels, minlength=len(label_map)).astype(
+        np.float32
+    )
     class_counts[class_counts == 0.0] = 1.0
-    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(np.float32)
-    sample_weights = torch.tensor([class_weights_arr[lbl] for lbl in train_labels], dtype=torch.float32)
-    train_sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+    class_weights_arr = (len(train_labels) / (len(label_map) * class_counts)).astype(
+        np.float32
+    )
+    sample_weights = torch.tensor(
+        [class_weights_arr[lbl] for lbl in train_labels], dtype=torch.float32
+    )
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights, num_samples=len(sample_weights), replacement=True
+    )
 
+    # ---------------- Data & loaders ----------------
     train_loader = DataLoader(
         train_ds,
         batch_size=args.wsi_batch_size,
@@ -134,6 +151,7 @@ def train(args) -> None:
         collate_fn=collate_wsi_batch,
     )
 
+    # ---------------- Model ----------------
     model = MambaMIL(
         embed_dim=args.embed_dim,
         model_dim=args.model_dim,
@@ -147,10 +165,17 @@ def train(args) -> None:
         d_state=args.d_state,
     ).to(device)
 
-    model.set_logit_adjustment(torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau)
-    print(f"[LOGIT ADJUST] tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}")
+    model.set_logit_adjustment(
+        torch.tensor(class_counts, device=device), tau=args.logit_adjust_tau
+    )
+    print(
+        f"[LOGIT ADJUST] tau={args.logit_adjust_tau} class_counts={class_counts.tolist()}"
+    )
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # ---------------- Optimization ----------------
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
     criterion = nn.CrossEntropyLoss()
     monitor_mode = _resolve_monitor_mode(args.monitor_metric, args.monitor_mode)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -172,6 +197,7 @@ def train(args) -> None:
     epochs_no_improve = 0
     history = []
 
+    # ---------------- Training loop ----------------
     for epoch in range(1, args.epochs + 1):
         print(f"\n[EPOCH {epoch:03d}] Starting epoch {epoch}...")
         epoch_start = time.perf_counter()
@@ -269,7 +295,10 @@ def train(args) -> None:
         if math.isfinite(current_val_score):
             scheduler.step(current_val_score)
 
-        if args.early_stopping_patience > 0 and epochs_no_improve >= args.early_stopping_patience:
+        if (
+            args.early_stopping_patience > 0
+            and epochs_no_improve >= args.early_stopping_patience
+        ):
             print(
                 f"[EARLY STOP] No val_{args.monitor_metric} improvement for {epochs_no_improve} epochs."
             )
@@ -302,6 +331,7 @@ def train(args) -> None:
             best_path,
         )
 
+    # ---------------- Test & report ----------------
     ckpt = torch.load(best_path, map_location=device)
     model.load_state_dict(ckpt["model_state_dict"])
     test_metrics = evaluate(model, test_loader, criterion, device)
@@ -367,8 +397,12 @@ def parse_args():
     parser.add_argument("--attn-dim", type=int, default=128)
     parser.add_argument("--expand-factor", type=int, default=2)
     parser.add_argument("--conv-kernel-size", type=int, default=3)
-    parser.add_argument("--d-state", type=int, default=8,
-                        help="SSM state dimension (d_state in S6 selective scan)")
+    parser.add_argument(
+        "--d-state",
+        type=int,
+        default=8,
+        help="SSM state dimension (d_state in S6 selective scan)",
+    )
     parser.add_argument("--no-coords", action="store_true")
 
     parser.add_argument("--max-patches-per-wsi", type=int, default=512)
@@ -377,15 +411,21 @@ def parse_args():
         choices=["uniform", "random", "head"],
         default="uniform",
     )
-    parser.add_argument("--logit-adjust-tau", type=float, default=1.0,
-                        help="Logit adjustment tau (0 = disabled)")
+    parser.add_argument(
+        "--logit-adjust-tau",
+        type=float,
+        default=1.0,
+        help="Logit adjustment tau (0 = disabled)",
+    )
 
     parser.add_argument(
         "--monitor-metric",
         choices=["loss", "accuracy", "balanced_accuracy", "macro_f1", "f1", "auc"],
         default="macro_f1",
     )
-    parser.add_argument("--monitor-mode", choices=["auto", "min", "max"], default="auto")
+    parser.add_argument(
+        "--monitor-mode", choices=["auto", "min", "max"], default="auto"
+    )
     parser.add_argument("--early-stopping-patience", type=int, default=8)
     parser.add_argument("--early-stopping-min-delta", type=float, default=1e-4)
 

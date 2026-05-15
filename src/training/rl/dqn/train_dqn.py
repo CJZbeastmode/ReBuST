@@ -24,7 +24,7 @@ from src.utils.wsi import WSI
 from src.utils.dynamic_patch_env import DynamicPatchEnv
 from src.utils.patch_scores import *
 
-LAMBDA_LR = 0.05  # FIXED: Match A2C learning rate for faster adaptation
+LAMBDA_LR = 0.05  # Match A2C learning rate for faster adaptation
 ZOOM_BUDGET = 0.5
 WARMUP_EPOCHS = 2  # Warmup epochs with fixed lambda for exploration
 
@@ -40,7 +40,6 @@ class QNet(nn.Module):
 
     def __init__(self, state_dim, hidden_dim=256):
         super().__init__()
-        # FIXED: Add LayerNorm like A2C for more stable training
         self.net = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -164,7 +163,7 @@ class DQNAgent:
                     self.device
                 )  # (B_nt, D)
 
-                # FIXED: Double DQN - use online network for action selection
+                # Double DQN - use online network for action selection
                 # This reduces overestimation bias
                 online_q_next = self.q(ns_batch)  # (B_nt, 2)
                 best_actions = online_q_next.argmax(dim=1)  # (B_nt,)
@@ -191,7 +190,6 @@ class DQNAgent:
         self.opt.step()
 
         self.update_count += 1
-        # FIXED: Update target network based on training updates, not steps
         # Use smaller frequency (1000) for more stable learning
         if self.update_count % 1000 == 0:
             self.q_target.load_state_dict(self.q.state_dict())
@@ -236,7 +234,6 @@ def run_episode_dqn(env, agent, lambda_zoom, device, max_steps, batch_size=64):
         cost = 1.0 if action == 1 else 0.0
         zoom_count += int(cost)
 
-        # FIXED: Separate raw reward from constrained reward for clarity
         # Raw reward for episode statistics
         ep_reward_raw += reward
         # Effective reward for learning (what agent learns from)
@@ -335,8 +332,6 @@ def main():
     # --------------------------------------------------
     # Create agent
     # --------------------------------------------------
-    # CRITICAL FIX: Much slower epsilon decay to maintain exploration
-    # Problem: Fast decay causes Q-values to bias toward STOP before learning zoom benefits
     agent = DQNAgent(
         state_dim=state_dim,
         device=device,
@@ -347,7 +342,7 @@ def main():
     # --------------------------------------------------
     # Training loop
     # --------------------------------------------------
-    lambda_zoom = 2.0  # FIXED: Start with 2.0 like A2C for stronger initial exploration
+    lambda_zoom = 2.0 
 
     for epoch in range(args.epochs):
         # Warmup phase: fixed lambda for exploration
@@ -418,6 +413,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# 21701 sec

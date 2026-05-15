@@ -1,6 +1,14 @@
 """
-Module for representing a patched image as a forest of PatchNodes.
+PatchedImage — visualization wrapper for patch forests
+======================================================
+
+Provides HTML visualization for a set of kept/zoomed patches by
+reconstructing the patch hierarchy using WSI geometry.
 """
+
+# ==========================================================================
+# Imports
+# ==========================================================================
 
 from typing import List, Tuple
 
@@ -9,6 +17,11 @@ import json
 import base64
 from io import BytesIO
 import os
+
+
+# ==========================================================================
+# Patched image representation
+# ==========================================================================
 
 
 class PatchedImage:
@@ -22,6 +35,9 @@ class PatchedImage:
     - Valid patches = LEAVES
     """
 
+    # ---------------------------------------------------------------------------
+    # __init__
+    # ---------------------------------------------------------------------------
     def __init__(
         self,
         wsi: WSI,
@@ -35,6 +51,15 @@ class PatchedImage:
         -- wsi (WSI): WSI object with slide and level information
         -- patch_coords (List[Tuple[int, int, int]]): List of (level x, y) tuples for kept patches
         -- zoomed_coords (List[Tuple[int, int, int]]): List of (level, x, y) tuples for zoomed patches
+
+        Args:
+            self: Description.
+            wsi: Description.
+            patch_coords: Description.
+            zoomed_coords: Description.
+
+        Returns:
+            None: Description.
         """
         self.wsi = wsi
         self.patch_coords = patch_coords
@@ -58,6 +83,13 @@ class PatchedImage:
 
         Returns
         -- output_html (str): Path to the saved HTML file
+
+        Args:
+            self: Description.
+            output_html: Description.
+
+        Returns:
+            object: Description.
         """
 
         kept = self.patch_coords
@@ -115,8 +147,22 @@ class PatchedImage:
 
         ds_thumb = ds[thumb_level]
 
+        # ---------------------------------------------------------------------------
+        # to_thumb
+        # ---------------------------------------------------------------------------
         def to_thumb(lvl, x, y, patch_size):
-            """Map (lvl, x, y, patch_size) in level coordinates to thumbnail coords (x, y, size)."""
+            """
+            Map (lvl, x, y, patch_size) in level coordinates to thumbnail coords (x, y, size).
+
+            Args:
+                lvl: Description.
+                x: Description.
+                y: Description.
+                patch_size: Description.
+
+            Returns:
+                object: Description.
+            """
             ds_src = ds[lvl]
 
             # Map to base level 0 coords, then down to thumbnail level (thumb_level)

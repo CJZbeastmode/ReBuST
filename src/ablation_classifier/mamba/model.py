@@ -65,8 +65,8 @@ def _parallel_scan(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     L = a.shape[1]
     d = 1
     while d < L:
-        a_left = a[:, :L - d]
-        b_left = b[:, :L - d]
+        a_left = a[:, : L - d]
+        b_left = b[:, : L - d]
         a_right_new = a[:, d:] * a_left
         b_right_new = a[:, d:] * b_left + b[:, d:]
         a = torch.cat([a[:, :d], a_right_new], dim=1)
@@ -124,14 +124,18 @@ class SelectiveSSM(nn.Module):
 
         # A: diagonal SSM matrix, log-parameterised so A = -exp(A_log) stays negative.
         # Initialised as [1, 2, …, d_state] for each channel (HiPPO-inspired).
-        A_init = torch.arange(1, d_state + 1, dtype=torch.float32).unsqueeze(0).expand(d_inner, -1)
+        A_init = (
+            torch.arange(1, d_state + 1, dtype=torch.float32)
+            .unsqueeze(0)
+            .expand(d_inner, -1)
+        )
         self.A_log = nn.Parameter(torch.log(A_init.clone()))
 
         # D: per-channel skip-connection scalar
         self.D = nn.Parameter(torch.ones(d_inner))
 
         # dt_proj weight: uniform init matching dt_rank^{-0.5} scale
-        nn.init.uniform_(self.dt_proj.weight, -self.dt_rank ** -0.5, self.dt_rank ** -0.5)
+        nn.init.uniform_(self.dt_proj.weight, -self.dt_rank**-0.5, self.dt_rank**-0.5)
 
         # dt_proj bias: initialise so softplus(bias) is uniform in [dt_min, dt_max]
         dt_init = torch.exp(
@@ -156,25 +160,28 @@ class SelectiveSSM(nn.Module):
         A = -torch.exp(self.A_log.float())  # [d_inner, N]
 
         # Input-dependent projections
-        xbc = self.x_proj(x)                                    # [B, L, dt_rank + 2N]
+        xbc = self.x_proj(x)  # [B, L, dt_rank + 2N]
         dt_raw, B_sel, C = xbc.split([self.dt_rank, N, N], dim=-1)
-        dt = F.softplus(self.dt_proj(dt_raw))                   # [B, L, d_inner], positive
+        dt = F.softplus(self.dt_proj(dt_raw))  # [B, L, d_inner], positive
 
         # ZOH discretisation
         # A_bar[b,l,d,n] = exp(dt[b,l,d] * A[d,n])
         # Bu[b,l,d,n]    = dt[b,l,d] * B_sel[b,l,n] * x[b,l,d]  (combined input)
-        A_bar = torch.exp(dt.unsqueeze(-1) * A)                 # [B, L, d_inner, N]
-        Bu    = (dt.unsqueeze(-1) * B_sel.unsqueeze(2)          # B_bar [B, L, d_inner, N]
-                 * x.unsqueeze(-1))                             # * x   → Bu [B, L, d_inner, N]
+        A_bar = torch.exp(dt.unsqueeze(-1) * A)  # [B, L, d_inner, N]
+        Bu = (
+            dt.unsqueeze(-1)
+            * B_sel.unsqueeze(2)  # B_bar [B, L, d_inner, N]
+            * x.unsqueeze(-1)
+        )  # * x   → Bu [B, L, d_inner, N]
 
         # GPU (CUDA/MPS): parallel scan — O(log L) rounds, truly parallel across B×D×N.
         # CPU:            JIT-compiled sequential scan — avoids large tensor allocations.
         if x.is_cuda:
-            h = _parallel_scan(A_bar, Bu)                       # [B, L, d_inner, N]
-            y = (h * C.unsqueeze(2)).sum(-1)                    # [B, L, d_inner]
+            h = _parallel_scan(A_bar, Bu)  # [B, L, d_inner, N]
+            y = (h * C.unsqueeze(2)).sum(-1)  # [B, L, d_inner]
         else:
-            y = _sequential_scan(A_bar, Bu, C)                  # [B, L, d_inner]
-        y = y + x * self.D                                      # skip connection
+            y = _sequential_scan(A_bar, Bu, C)  # [B, L, d_inner]
+        y = y + x * self.D  # skip connection
         return y
 
 
@@ -223,8 +230,8 @@ class MambaLikeMixer(nn.Module):
         """
         B, L, _ = x.shape
 
-        xz = self.in_proj(x)                                    # [B, L, 2*inner_dim]
-        x_in, z = xz.chunk(2, dim=-1)                          # each [B, L, inner_dim]
+        xz = self.in_proj(x)  # [B, L, 2*inner_dim]
+        x_in, z = xz.chunk(2, dim=-1)  # each [B, L, inner_dim]
 
         # Causal depthwise conv (pad right so output length == L)
         x_in = self.conv1d(x_in.transpose(1, 2)).transpose(1, 2)[:, :L, :]
@@ -234,7 +241,7 @@ class MambaLikeMixer(nn.Module):
         x_in = x_in * mask.unsqueeze(-1).float()
 
         # Selective SSM
-        y = self.ssm(x_in)                                      # [B, L, inner_dim]
+        y = self.ssm(x_in)  # [B, L, inner_dim]
 
         # Gating (SiLU of the parallel branch) + output projection
         y = y * F.silu(z)
@@ -300,6 +307,7 @@ class MambaMIL(nn.Module):
         self.num_classes = int(num_classes)
         self.use_coords = bool(use_coords)
 
+        # patch and coordinate projections
         self.patch_proj = nn.Linear(self.embed_dim, self.model_dim)
         if self.use_coords:
             self.coord_proj = nn.Sequential(
@@ -308,6 +316,7 @@ class MambaMIL(nn.Module):
                 nn.Linear(self.model_dim, self.model_dim),
             )
 
+        # Mamba encoder blocks
         self.blocks = nn.ModuleList(
             [
                 MambaEncoderBlock(
@@ -320,16 +329,22 @@ class MambaMIL(nn.Module):
                 for _ in range(int(num_layers))
             ]
         )
-        self.pool = CLAMAttentionPooling(self.model_dim, attn_dim=attn_dim, dropout=dropout)
+        # attention pooling
+        self.pool = CLAMAttentionPooling(
+            self.model_dim, attn_dim=attn_dim, dropout=dropout
+        )
+        # classifier and logit adjustment buffer
         self.norm = nn.LayerNorm(self.model_dim)
         self.classifier = nn.Linear(self.model_dim, self.num_classes)
         self.register_buffer("logit_bias", torch.zeros(self.num_classes))
 
+    # Set logit adjustment bias from class counts and tau
     def set_logit_adjustment(self, class_counts: torch.Tensor, tau: float) -> None:
         counts = class_counts.float().clamp(min=1.0)
         priors = counts / counts.sum()
         self.logit_bias = (-tau * torch.log(priors)).to(self.classifier.weight.device)
 
+    # Pad a list of per-WSI patch tensors into a batch tensor with mask
     @staticmethod
     def _pad_batch(
         patch_batches: List[torch.Tensor],

@@ -16,6 +16,7 @@ from sklearn.metrics import (
 from torch.utils.data import DataLoader
 
 
+# Train or evaluate one pass over the loader, returning metrics dict
 def _collect_logits_targets(
     model: nn.Module,
     loader: DataLoader,
@@ -26,11 +27,13 @@ def _collect_logits_targets(
     progress_interval: int = 10,
     grad_accum_steps: int = 1,
 ) -> Dict:
+    # Setup
     is_train = optimizer is not None
     progress_interval = max(1, int(progress_interval))
     grad_accum_steps = max(1, int(grad_accum_steps))
     model.train(is_train)
 
+    # Initialization
     losses: List[float] = []
     all_targets: List[int] = []
     all_probs: List[np.ndarray] = []
@@ -45,6 +48,7 @@ def _collect_logits_targets(
             optimizer.zero_grad()
 
         for batch_idx, batch in enumerate(loader, start=1):
+            # Move data to device
             move_start = time.perf_counter()
             patch_batches = [item["embeddings"].to(device) for item in batch]
             coord_batches = [item["coords"].to(device) for item in batch]
@@ -55,12 +59,16 @@ def _collect_logits_targets(
             )
             move_elapsed = time.perf_counter() - move_start
 
+            # Forward pass
             forward_start = time.perf_counter()
             model_output = model(patch_batches, coord_batches)
-            logits = model_output[0] if isinstance(model_output, tuple) else model_output
+            logits = (
+                model_output[0] if isinstance(model_output, tuple) else model_output
+            )
             loss = criterion(logits, targets)
             forward_elapsed = time.perf_counter() - forward_start
 
+            # Backward pass and optimization step (if training)
             backward_elapsed = 0.0
             if is_train:
                 backward_start = time.perf_counter()
@@ -99,14 +107,19 @@ def _collect_logits_targets(
                     f"post_time={post_elapsed:.2f}s"
                 )
 
+    # Compute metrics
     all_targets_np = np.array(all_targets)
     all_preds_np = np.array(all_preds)
     all_probs_np = np.vstack(all_probs)
 
     acc = float(accuracy_score(all_targets_np, all_preds_np))
     balanced_acc = float(balanced_accuracy_score(all_targets_np, all_preds_np))
-    macro_f1 = float(f1_score(all_targets_np, all_preds_np, average="macro", zero_division=0))
-    f1 = float(f1_score(all_targets_np, all_preds_np, average="weighted", zero_division=0))
+    macro_f1 = float(
+        f1_score(all_targets_np, all_preds_np, average="macro", zero_division=0)
+    )
+    f1 = float(
+        f1_score(all_targets_np, all_preds_np, average="weighted", zero_division=0)
+    )
 
     num_classes = int(all_probs_np.shape[1])
     per_class_f1 = f1_score(
@@ -116,7 +129,9 @@ def _collect_logits_targets(
         labels=list(range(num_classes)),
         zero_division=0,
     )
-    conf_mat = confusion_matrix(all_targets_np, all_preds_np, labels=list(range(num_classes)))
+    conf_mat = confusion_matrix(
+        all_targets_np, all_preds_np, labels=list(range(num_classes))
+    )
 
     try:
         if num_classes == 2:
@@ -148,6 +163,7 @@ def _collect_logits_targets(
     }
 
 
+# Train for one epoch and return metrics
 def train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -170,6 +186,7 @@ def train_one_epoch(
     )
 
 
+# Evaluate without gradient updates and return metrics
 def evaluate(
     model: nn.Module,
     loader: DataLoader,
